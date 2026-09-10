@@ -1,0 +1,54 @@
+/start
+   │
+   ▼
+Kiểm tra app_user
+   │
+   ▼
+➕ Báo cáo sự cố
+   │
+   ▼
+Chọn tuyến
+   │
+   ▼
+fiber_route
+   │
+   ├── cable_type = ADSS
+   └── fiber_count = 24
+   │
+   ▼
+IncidentService
+   │
+   ▼
+Chọn repair_span_type
+   │
+   ├── UNDERGROUND
+   ├── KV100
+   ├── KV200
+   ├── KV300
+   ├── KV400
+   └── KV500
+   ▼
+Hiển thị và chọn vật tư
+   ▼
+Gửi vị trí GPS
+   ▼
+Gửi ảnh trước sự cố 
+   ▼
+Gửi ảnh sau khi khắc phục
+   ▼
+Cập nhật CSDL
+
+Ví dụ Bước hiển thị và chọn vật tư: sẽ hiển thị vật tư theo cấu hình và để người dùng nhập số lượng như sau:
+
+Vật tư theo cấu hình:
+
+1. Cáp ADSS KV300 24FO
+2. Măng xông 24FO
+3. Bộ treo KV300
+4. Bộ néo KV300
+
+Vật tư bổ sung:
+5. Kẹp
+6. Đai cột
+7. Khác
+

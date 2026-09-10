@@ -1,0 +1,67 @@
+fiber_rescue/
+│
+├── app.py
+│
+├── config/
+│   ├── __init__.py
+│   └── settings.py
+│
+├── database/
+│   ├── __init__.py
+│   ├── connection.py
+│   ├── schema.sql
+│   └── repositories/
+│       ├── __init__.py
+│       ├── user_repository.py
+│       ├── route_repository.py
+│       ├── incident_repository.py
+│       ├── material_repository.py
+│       └── lookup_repository.py
+│
+├── services/
+│   ├── __init__.py
+│   ├── incident_service.py
+│   ├── material_service.py
+│   └── photo_service.py
+│
+├── bot/
+│   ├── __init__.py
+│   ├── bot.py
+│   ├── handlers/
+│   │   ├── __init__.py
+│   │   ├── start_handler.py
+│   │   ├── incident_handler.py
+│   │   └── lookup_handler.py
+│   │
+│   ├── keyboards/
+│   │   ├── __init__.py
+│   │   ├── main_menu.py
+│   │   ├── route_menu.py
+│   │   └── material_menu.py
+│   │
+│   └── states/
+│       ├── __init__.py
+│       └── incident_state.py
+│
+├── dashboard/
+│   ├── __init__.py
+│   ├── app.py
+│   ├── pages/
+│   │   ├── incidents.py
+│   │   ├── materials.py
+│   │   ├── routes.py
+│   │   └── reports.py
+│   └── components/
+│       ├── incident_detail.py
+│       └── filters.py
+│
+├── storage/
+│   └── photos/
+│
+├── utils/
+│   ├── __init__.py
+│   ├── validators.py
+│   └── formatters.py
+│
+├── requirements.txt
+└── README.md
