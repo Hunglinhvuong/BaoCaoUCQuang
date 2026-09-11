@@ -2,6 +2,8 @@ from typing import Dict
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+from bot.keyboards.common import cancel_button_row
+
 # (khoá hiển thị trong inc, callback key ngắn, nhãn hiển thị)
 _FIELDS = [
     ("route_id", "route", "🛣 Tuyến"),
@@ -36,4 +38,5 @@ def edit_menu_keyboard(inc: Dict) -> InlineKeyboardMarkup:
         buttons.insert(2, [InlineKeyboardButton("🔎 Nguyên nhân", callback_data="edit_field:cause")])
 
     buttons.append([InlineKeyboardButton("⬅️ Không sửa, quay lại tóm tắt", callback_data="edit_menu_back")])
+    buttons.append(cancel_button_row())
     return InlineKeyboardMarkup(buttons)
