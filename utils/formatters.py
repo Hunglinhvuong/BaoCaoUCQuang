@@ -1,5 +1,23 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Optional
+from zoneinfo import ZoneInfo
+
+from config.settings import settings
+
+_LOCAL_TZ = ZoneInfo(settings.timezone)
+
+
+def to_local(dt: Optional[datetime]) -> Optional[datetime]:
+    """Chuyển datetime (tz-aware, thường là UTC từ asyncpg với cột TIMESTAMPTZ)
+    sang giờ địa phương (APP_TIMEZONE) để hiển thị cho người dùng.
+    Nếu dt là naive (dữ liệu cũ / cột không timezone) thì coi như đã là giờ
+    địa phương sẵn, chỉ gắn tzinfo mà không đổi giá trị."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=_LOCAL_TZ)
+    return dt.astimezone(_LOCAL_TZ)
 
 
 def format_quantity(value: Decimal) -> str:
@@ -59,9 +77,9 @@ def format_incident_detail(incident, materials: List, photos: List) -> str:
     if incident["description"]:
         lines.append(f"Mô tả: {incident['description']}")
     lines.append(f"Người báo cáo: {incident['reporter_name']}")
-    lines.append(f"Thời gian báo cáo: {incident['reported_at']:%d/%m/%Y %H:%M}")
+    lines.append(f"Thời gian báo cáo: {to_local(incident['reported_at']):%d/%m/%Y %H:%M}")
     if incident["completed_at"]:
-        lines.append(f"Thời gian hoàn tất: {incident['completed_at']:%d/%m/%Y %H:%M}")
+        lines.append(f"Thời gian hoàn tất: {to_local(incident['completed_at']):%d/%m/%Y %H:%M}")
 
     if materials:
         lines.append("")

@@ -1,17 +1,10 @@
 import os
-from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Tuple
 
 from dotenv import load_dotenv
 
-# --- SỬA ĐOẠN NÀY ---
-# Lấy đường dẫn tuyệt đối của thư mục chứa file app.py (thư mục gốc dự án)
-BASE_DIR = Path(__file__).resolve().parent.parent # Nếu file này nằm trong thư mục con như config/
-# Hoặc nếu file này nằm ngay tại thư mục gốc cùng cấp app.py thì dùng: BASE_DIR = Path(__file__).resolve().parent
-
-env_path = BASE_DIR / ".env"
-load_dotenv(dotenv_path=env_path)
+load_dotenv()
 
 
 def _parse_admin_ids(raw: str) -> Tuple[int, ...]:
@@ -32,6 +25,7 @@ class Settings:
 
     photo_storage_dir: str = os.getenv("PHOTO_STORAGE_DIR", "storage/photos")
     persistence_file: str = os.getenv("PERSISTENCE_FILE", "storage/bot_persistence.pickle")
+    timezone: str = os.getenv("APP_TIMEZONE", "Asia/Ho_Chi_Minh")
 
     admin_telegram_ids: Tuple[int, ...] = field(
         default_factory=lambda: _parse_admin_ids(os.getenv("ADMIN_TELEGRAM_IDS", ""))

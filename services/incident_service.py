@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
@@ -72,7 +72,7 @@ class IncidentService:
                         photo.get("caption"),
                     )
 
-                completed_at = datetime.now()
+                completed_at = datetime.now(timezone.utc)
                 await self.incident_repo.update_status(conn, incident_id, "COMPLETED", completed_at)
                 await self.history_repo.add(
                     conn, incident_id, "DRAFT", "COMPLETED", reported_by, "Hoàn tất ứng cứu"
