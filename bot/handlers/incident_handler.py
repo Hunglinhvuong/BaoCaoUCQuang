@@ -63,6 +63,39 @@ def _get_incident(context: ContextTypes.DEFAULT_TYPE):
     return context.user_data.get("incident")
 
 
+# Quy tắc nghiệp vụ: loại cáp quyết định các kiểu đoạn khắc phục được phép.
+# ID hiện tại trong bảng repair_span_type:
+#   1 = UNDERGROUND
+#   2 = KV100
+#   3 = KV200
+#   4 = KV300
+#   5 = KV400
+#   6 = KV500
+ALLOWED_REPAIR_SPAN_IDS = {
+    "F8": {1, 2},
+    "ADSS": {1, 2, 3, 4, 5, 6},
+}
+
+
+def _allowed_repair_span_ids(cable_type):
+    """Trả về tập repair_span_type_id được phép theo loại cáp."""
+    return ALLOWED_REPAIR_SPAN_IDS.get(cable_type, set())
+
+
+def _filter_repair_spans(spans, cable_type):
+    """Lọc danh sách repair span để chỉ hiển thị lựa chọn hợp lệ."""
+    allowed_ids = _allowed_repair_span_ids(cable_type)
+    return [
+        span for span in spans
+        if span["repair_span_type_id"] in allowed_ids
+    ]
+
+
+def _is_repair_span_allowed(cable_type, span_id):
+    """Kiểm tra một repair span có hợp lệ với loại cáp hay không."""
+    return span_id in _allowed_repair_span_ids(cable_type)
+
+
 async def _reply_session_lost(update: Update) -> int:
     text = "⚠️ Không tìm thấy dữ liệu báo cáo đang nhập (có thể do bot vừa khởi động lại).\nVui lòng gõ /bc để bắt đầu lại."
     if update.callback_query is not None:
@@ -200,7 +233,33 @@ async def select_route(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     })
 
     if inc.pop("edit_return", False):
-        # Tuyến đổi -> cable_type/fiber_count đổi -> làm mới vật tư (giữ nguyên đoạn khắc phục cũ)
+        # Nếu đổi tuyến làm thay đổi cable_type, repair span cũ có thể trở nên
+        # không hợp lệ (VD: ADSS/KV300 -> F8/KV300). Trong trường hợp đó phải
+        # yêu cầu chọn lại repair span thay vì đưa dữ liệu sai vào preview.
+        current_span_id = inc.get("repair_span_type_id")
+
+        if (
+            current_span_id is not None
+            and not _is_repair_span_allowed(route["cable_type"], current_span_id)
+        ):
+            inc["repair_span_type_id"] = None
+            inc["span_name"] = ""
+            inc["selected"] = {}
+            inc["material_options"] = {"config": [], "additional": []}
+            inc["edit_return"] = True
+
+            lookup_repo = context.bot_data["lookup_repo"]
+            spans = await lookup_repo.list_repair_span_types()
+            spans = _filter_repair_spans(spans, route["cable_type"])
+
+            await query.edit_message_text(
+                "⚠️ Tuyến mới dùng cáp {} nên khoảng vượt cũ không còn hợp lệ.\n\n"
+                "📏 Vui lòng chọn lại kiểu đoạn khắc phục:".format(route["cable_type"]),
+                reply_markup=repair_span_keyboard(spans),
+            )
+            return IncidentState.SELECT_SPAN
+
+        # Tuyến đổi nhưng repair span hiện tại vẫn hợp lệ -> làm mới vật tư.
         await _recompute_materials(context, warn=True)
         return await _render_confirm(update, context)
 
@@ -271,6 +330,8 @@ async def select_cause(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         return await _render_confirm(update, context)
 
     spans = await lookup_repo.list_repair_span_types()
+    spans = _filter_repair_spans(spans, inc["cable_type"])
+
     await query.edit_message_text(
         "📏 Chọn kiểu đoạn khắc phục:",
         reply_markup=repair_span_keyboard(spans),
@@ -322,12 +383,27 @@ async def select_span(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         return await _reply_session_lost(update)
 
     span_id = int(query.data.split(":")[1])
+
+    # Không chỉ ẩn trên giao diện; phải kiểm tra lại callback để ngăn
+    # trường hợp người dùng gửi thủ công một span không hợp lệ.
+    cable_type = inc.get("cable_type")
+    if not _is_repair_span_allowed(cable_type, span_id):
+        await query.answer(
+            "⚠️ Kiểu đoạn khắc phục không hợp lệ cho cáp {}.".format(cable_type),
+            show_alert=True,
+        )
+        return IncidentState.SELECT_SPAN
+
     lookup_repo = context.bot_data["lookup_repo"]
     spans = await lookup_repo.list_repair_span_types()
     span_row = next((s for s in spans if s["repair_span_type_id"] == span_id), None)
 
+    if span_row is None:
+        await query.answer("⚠️ Không tìm thấy kiểu đoạn khắc phục.", show_alert=True)
+        return IncidentState.SELECT_SPAN
+
     inc["repair_span_type_id"] = span_id
-    inc["span_name"] = span_row["span_name"] if span_row else ""
+    inc["span_name"] = span_row["span_name"]
 
     is_edit = inc.pop("edit_return", False)
     await _recompute_materials(context, warn=is_edit)
@@ -405,8 +481,10 @@ async def material_qty_text(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     mid = inc.get("awaiting_qty_material_id")
     qty = parse_quantity(update.message.text)
 
-    if qty is None:
-        await update.message.reply_text("Số lượng không hợp lệ. Nhập lại (VD: 150 hoặc 12.5):")
+    if qty is None or qty < 0:
+        await update.message.reply_text(
+            "Số lượng không hợp lệ. Nhập số >= 0 (VD: 0, 150 hoặc 12.5):"
+        )
         return IncidentState.ADD_MATERIAL_QTY
 
     selected = inc["selected"]
@@ -502,10 +580,16 @@ async def material_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         return await _reply_session_lost(update)
 
     selected = inc["selected"]
-    used = {mid: item for mid, item in selected.items() if item["qty"] > 0}
 
-    if not used:
-        await query.answer("Cần chọn ít nhất 1 vật tư có số lượng > 0.", show_alert=True)
+    # Cho phép số lượng vật tư = 0.
+    # 0 có ý nghĩa: vật tư nằm trong danh sách áp dụng nhưng thực tế không sử dụng.
+    # Chỉ cấm số lượng âm (đã được chặn thêm ở material_qty_text).
+    negative_items = [
+        item for item in selected.values()
+        if item["qty"] < 0
+    ]
+    if negative_items:
+        await query.answer("Số lượng vật tư không được âm.", show_alert=True)
         return IncidentState.SELECT_MATERIALS
 
     await query.answer()
@@ -772,9 +856,14 @@ async def _ask_cause_edit(query, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _ask_span_edit(query, context: ContextTypes.DEFAULT_TYPE) -> None:
+    inc = _get_incident(context)
     lookup_repo = context.bot_data["lookup_repo"]
     spans = await lookup_repo.list_repair_span_types()
-    await query.edit_message_text("📏 Chọn kiểu đoạn khắc phục:", reply_markup=repair_span_keyboard(spans))
+    spans = _filter_repair_spans(spans, inc.get("cable_type"))
+    await query.edit_message_text(
+        "📏 Chọn kiểu đoạn khắc phục:",
+        reply_markup=repair_span_keyboard(spans),
+    )
 
 
 async def _ask_materials_edit(query, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -922,8 +1011,10 @@ async def confirm_save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     incident_service = context.bot_data["incident_service"]
 
+    # Lưu cả vật tư có quantity = 0.
+    # 0 thể hiện vật tư được xét/áp dụng nhưng thực tế không sử dụng.
     materials = [
-        (mid, item["qty"], None) for mid, item in inc["selected"].items() if item["qty"] > 0
+        (mid, item["qty"], None) for mid, item in inc["selected"].items()
     ]
     photos = inc["before_photos"] + inc["after_photos"]
 

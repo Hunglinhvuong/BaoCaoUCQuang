@@ -72,7 +72,7 @@ class IncidentService:
                         photo.get("caption"),
                     )
 
-                completed_at = datetime.utcnow()
+                completed_at = datetime.now()
                 await self.incident_repo.update_status(conn, incident_id, "COMPLETED", completed_at)
                 await self.history_repo.add(
                     conn, incident_id, "DRAFT", "COMPLETED", reported_by, "Hoàn tất ứng cứu"

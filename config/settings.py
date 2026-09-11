@@ -1,10 +1,17 @@
 import os
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Tuple
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# --- SỬA ĐOẠN NÀY ---
+# Lấy đường dẫn tuyệt đối của thư mục chứa file app.py (thư mục gốc dự án)
+BASE_DIR = Path(__file__).resolve().parent.parent # Nếu file này nằm trong thư mục con như config/
+# Hoặc nếu file này nằm ngay tại thư mục gốc cùng cấp app.py thì dùng: BASE_DIR = Path(__file__).resolve().parent
+
+env_path = BASE_DIR / ".env"
+load_dotenv(dotenv_path=env_path)
 
 
 def _parse_admin_ids(raw: str) -> Tuple[int, ...]:
