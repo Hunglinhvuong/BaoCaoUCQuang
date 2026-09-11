@@ -17,8 +17,15 @@ async def init_pool() -> asyncpg.Pool:
             dsn=settings.dsn,
             min_size=settings.db_min_pool,
             max_size=settings.db_max_pool,
+            # Đảm bảo mọi session dùng đúng timezone hiển thị (APP_TIMEZONE),
+            # để các phép cast kiểu reported_at::date (dùng trong /kt) không bị
+            # lệch ngày khi PostgreSQL mặc định phiên làm việc theo UTC.
+            server_settings={"timezone": settings.timezone},
         )
-        logger.info("Database pool initialized (min=%s, max=%s)", settings.db_min_pool, settings.db_max_pool)
+        logger.info(
+            "Database pool initialized (min=%s, max=%s, timezone=%s)",
+            settings.db_min_pool, settings.db_max_pool, settings.timezone,
+        )
     return _pool
 
 
