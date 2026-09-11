@@ -20,6 +20,7 @@ from telegram.ext import (
     filters,
 )
 
+from bot.keyboards.common import cancel_button_row
 from bot.keyboards.edit_menu import edit_menu_keyboard
 from bot.keyboards.main_menu import main_menu_text
 from bot.keyboards.material_menu import additional_material_keyboard, material_selection_keyboard
@@ -28,6 +29,7 @@ from bot.keyboards.route_menu import (
     incident_type_keyboard,
     repair_span_keyboard,
     route_list_keyboard,
+    route_search_keyboard,
 )
 from bot.states.incident_state import IncidentState
 from utils.formatters import format_incident_summary
@@ -54,46 +56,13 @@ def _reset_incident_data(context: ContextTypes.DEFAULT_TYPE, telegram_user_id: i
 
 
 def _qty_step(group: str) -> Decimal:
-    return Decimal("50") if group == "CABLE" else Decimal("1")
+    return Decimal("100") if group == "CABLE" else Decimal("1")
 
 
 def _get_incident(context: ContextTypes.DEFAULT_TYPE):
     """Lấy dict báo cáo đang nhập, hoặc None nếu session đã mất (VD: bot restart
     giữa lúc nhập, dữ liệu tạm trong RAM không còn)."""
     return context.user_data.get("incident")
-
-
-# Quy tắc nghiệp vụ: loại cáp quyết định các kiểu đoạn khắc phục được phép.
-# ID hiện tại trong bảng repair_span_type:
-#   1 = UNDERGROUND
-#   2 = KV100
-#   3 = KV200
-#   4 = KV300
-#   5 = KV400
-#   6 = KV500
-ALLOWED_REPAIR_SPAN_IDS = {
-    "F8": {1, 2},
-    "ADSS": {1, 2, 3, 4, 5, 6},
-}
-
-
-def _allowed_repair_span_ids(cable_type):
-    """Trả về tập repair_span_type_id được phép theo loại cáp."""
-    return ALLOWED_REPAIR_SPAN_IDS.get(cable_type, set())
-
-
-def _filter_repair_spans(spans, cable_type):
-    """Lọc danh sách repair span để chỉ hiển thị lựa chọn hợp lệ."""
-    allowed_ids = _allowed_repair_span_ids(cable_type)
-    return [
-        span for span in spans
-        if span["repair_span_type_id"] in allowed_ids
-    ]
-
-
-def _is_repair_span_allowed(cable_type, span_id):
-    """Kiểm tra một repair span có hợp lệ với loại cáp hay không."""
-    return span_id in _allowed_repair_span_ids(cable_type)
 
 
 async def _reply_session_lost(update: Update) -> int:
@@ -179,7 +148,7 @@ async def route_page(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def route_search_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text("🔍 Nhập tên tuyến cần tìm:")
+    await query.edit_message_text("🔍 Nhập tên tuyến cần tìm:", reply_markup=route_search_keyboard())
     return IncidentState.SEARCH_ROUTE
 
 
@@ -233,33 +202,7 @@ async def select_route(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     })
 
     if inc.pop("edit_return", False):
-        # Nếu đổi tuyến làm thay đổi cable_type, repair span cũ có thể trở nên
-        # không hợp lệ (VD: ADSS/KV300 -> F8/KV300). Trong trường hợp đó phải
-        # yêu cầu chọn lại repair span thay vì đưa dữ liệu sai vào preview.
-        current_span_id = inc.get("repair_span_type_id")
-
-        if (
-            current_span_id is not None
-            and not _is_repair_span_allowed(route["cable_type"], current_span_id)
-        ):
-            inc["repair_span_type_id"] = None
-            inc["span_name"] = ""
-            inc["selected"] = {}
-            inc["material_options"] = {"config": [], "additional": []}
-            inc["edit_return"] = True
-
-            lookup_repo = context.bot_data["lookup_repo"]
-            spans = await lookup_repo.list_repair_span_types()
-            spans = _filter_repair_spans(spans, route["cable_type"])
-
-            await query.edit_message_text(
-                "⚠️ Tuyến mới dùng cáp {} nên khoảng vượt cũ không còn hợp lệ.\n\n"
-                "📏 Vui lòng chọn lại kiểu đoạn khắc phục:".format(route["cable_type"]),
-                reply_markup=repair_span_keyboard(spans),
-            )
-            return IncidentState.SELECT_SPAN
-
-        # Tuyến đổi nhưng repair span hiện tại vẫn hợp lệ -> làm mới vật tư.
+        # Tuyến đổi -> cable_type/fiber_count đổi -> làm mới vật tư (giữ nguyên đoạn khắc phục cũ)
         await _recompute_materials(context, warn=True)
         return await _render_confirm(update, context)
 
@@ -330,8 +273,6 @@ async def select_cause(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         return await _render_confirm(update, context)
 
     spans = await lookup_repo.list_repair_span_types()
-    spans = _filter_repair_spans(spans, inc["cable_type"])
-
     await query.edit_message_text(
         "📏 Chọn kiểu đoạn khắc phục:",
         reply_markup=repair_span_keyboard(spans),
@@ -383,27 +324,12 @@ async def select_span(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         return await _reply_session_lost(update)
 
     span_id = int(query.data.split(":")[1])
-
-    # Không chỉ ẩn trên giao diện; phải kiểm tra lại callback để ngăn
-    # trường hợp người dùng gửi thủ công một span không hợp lệ.
-    cable_type = inc.get("cable_type")
-    if not _is_repair_span_allowed(cable_type, span_id):
-        await query.answer(
-            "⚠️ Kiểu đoạn khắc phục không hợp lệ cho cáp {}.".format(cable_type),
-            show_alert=True,
-        )
-        return IncidentState.SELECT_SPAN
-
     lookup_repo = context.bot_data["lookup_repo"]
     spans = await lookup_repo.list_repair_span_types()
     span_row = next((s for s in spans if s["repair_span_type_id"] == span_id), None)
 
-    if span_row is None:
-        await query.answer("⚠️ Không tìm thấy kiểu đoạn khắc phục.", show_alert=True)
-        return IncidentState.SELECT_SPAN
-
     inc["repair_span_type_id"] = span_id
-    inc["span_name"] = span_row["span_name"]
+    inc["span_name"] = span_row["span_name"] if span_row else ""
 
     is_edit = inc.pop("edit_return", False)
     await _recompute_materials(context, warn=is_edit)
@@ -468,6 +394,7 @@ async def material_qty_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=f"Nhập số lượng ({item['unit']}) cho '{item['name']}':",
+        reply_markup=InlineKeyboardMarkup([cancel_button_row()]),
     )
     return IncidentState.ADD_MATERIAL_QTY
 
@@ -481,10 +408,8 @@ async def material_qty_text(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     mid = inc.get("awaiting_qty_material_id")
     qty = parse_quantity(update.message.text)
 
-    if qty is None or qty < 0:
-        await update.message.reply_text(
-            "Số lượng không hợp lệ. Nhập số >= 0 (VD: 0, 150 hoặc 12.5):"
-        )
+    if qty is None:
+        await update.message.reply_text("Số lượng không hợp lệ. Nhập lại (VD: 150 hoặc 12.5):")
         return IncidentState.ADD_MATERIAL_QTY
 
     selected = inc["selected"]
@@ -580,16 +505,10 @@ async def material_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         return await _reply_session_lost(update)
 
     selected = inc["selected"]
+    used = {mid: item for mid, item in selected.items() if item["qty"] > 0}
 
-    # Cho phép số lượng vật tư = 0.
-    # 0 có ý nghĩa: vật tư nằm trong danh sách áp dụng nhưng thực tế không sử dụng.
-    # Chỉ cấm số lượng âm (đã được chặn thêm ở material_qty_text).
-    negative_items = [
-        item for item in selected.values()
-        if item["qty"] < 0
-    ]
-    if negative_items:
-        await query.answer("Số lượng vật tư không được âm.", show_alert=True)
+    if not used:
+        await query.answer("Cần chọn ít nhất 1 vật tư có số lượng > 0.", show_alert=True)
         return IncidentState.SELECT_MATERIALS
 
     await query.answer()
@@ -600,7 +519,7 @@ async def material_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     await query.edit_message_text(
         "✏️ Nhập mô tả sự cố (hoặc bấm Bỏ qua):",
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("⏭ Bỏ qua", callback_data="desc_skip")]]
+            [[InlineKeyboardButton("⏭ Bỏ qua", callback_data="desc_skip")], cancel_button_row()]
         ),
     )
     return IncidentState.ENTER_DESCRIPTION
@@ -653,6 +572,13 @@ async def _ask_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         text="📍 Bấm nút bên dưới để gửi vị trí GPS hiện tại:",
         reply_markup=keyboard,
     )
+    # ReplyKeyboardMarkup và InlineKeyboardMarkup không gộp chung 1 tin nhắn được
+    # -> gửi thêm 1 tin nhắn nhỏ có nút huỷ để người dùng vẫn thoát được dễ dàng.
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="Muốn dừng lại?",
+        reply_markup=InlineKeyboardMarkup([cancel_button_row()]),
+    )
     return IncidentState.SEND_LOCATION
 
 
@@ -674,6 +600,10 @@ async def receive_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await update.message.reply_text(
         "✅ Đã nhận vị trí.\n📷 Gửi ảnh TRƯỚC khi khắc phục (có thể gửi nhiều ảnh).",
         reply_markup=ReplyKeyboardRemove(),
+    )
+    await update.message.reply_text(
+        "Muốn dừng lại?",
+        reply_markup=InlineKeyboardMarkup([cancel_button_row()]),
     )
     return IncidentState.SEND_PHOTO_BEFORE
 
@@ -708,7 +638,7 @@ async def _receive_photo(
     await update.message.reply_text(
         f"✅ Đã nhận ảnh {label} ({len(inc[key])}). Gửi thêm hoặc bấm Xong.",
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("✅ Xong", callback_data=done_callback)]]
+            [[InlineKeyboardButton("✅ Xong", callback_data=done_callback)], cancel_button_row()]
         ),
     )
     return IncidentState.SEND_PHOTO_BEFORE if photo_type == "BEFORE" else IncidentState.SEND_PHOTO_AFTER
@@ -741,7 +671,10 @@ async def photos_before_done(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.edit_message_text("✅ Đã cập nhật ảnh trước.")
         return await _render_confirm(update, context)
 
-    await query.edit_message_text("✅ Đã lưu ảnh trước.\n\n📷 Gửi ảnh SAU khi khắc phục:")
+    await query.edit_message_text(
+        "✅ Đã lưu ảnh trước.\n\n📷 Gửi ảnh SAU khi khắc phục:",
+        reply_markup=InlineKeyboardMarkup([cancel_button_row()]),
+    )
     return IncidentState.SEND_PHOTO_AFTER
 
 
@@ -856,14 +789,9 @@ async def _ask_cause_edit(query, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _ask_span_edit(query, context: ContextTypes.DEFAULT_TYPE) -> None:
-    inc = _get_incident(context)
     lookup_repo = context.bot_data["lookup_repo"]
     spans = await lookup_repo.list_repair_span_types()
-    spans = _filter_repair_spans(spans, inc.get("cable_type"))
-    await query.edit_message_text(
-        "📏 Chọn kiểu đoạn khắc phục:",
-        reply_markup=repair_span_keyboard(spans),
-    )
+    await query.edit_message_text("📏 Chọn kiểu đoạn khắc phục:", reply_markup=repair_span_keyboard(spans))
 
 
 async def _ask_materials_edit(query, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1011,10 +939,8 @@ async def confirm_save(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
     incident_service = context.bot_data["incident_service"]
 
-    # Lưu cả vật tư có quantity = 0.
-    # 0 thể hiện vật tư được xét/áp dụng nhưng thực tế không sử dụng.
     materials = [
-        (mid, item["qty"], None) for mid, item in inc["selected"].items()
+        (mid, item["qty"], None) for mid, item in inc["selected"].items() if item["qty"] > 0
     ]
     photos = inc["before_photos"] + inc["after_photos"]
 
@@ -1068,6 +994,34 @@ async def confirm_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def cancel_incident(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.pop("incident", None)
     await update.message.reply_text("❌ Đã huỷ báo cáo sự cố.")
+    return ConversationHandler.END
+
+
+INCIDENT_CONVERSATION_TIMEOUT = 240  # 4 phút không thao tác -> tự huỷ
+
+
+@safe_conversation_step
+async def on_incident_timeout(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data.pop("incident", None)
+    text = (
+        "⏱ Đã hết thời gian chờ (4 phút không thao tác).\n"
+        "Báo cáo đang nhập dở đã bị huỷ. Gõ /bc để bắt đầu lại."
+    )
+
+    if update.callback_query is not None:
+        try:
+            await update.callback_query.answer()
+        except BadRequest:
+            pass
+        try:
+            await update.callback_query.edit_message_text(text)
+            return ConversationHandler.END
+        except BadRequest:
+            pass
+
+    if update.effective_chat is not None:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
+
     return ConversationHandler.END
 
 
@@ -1135,11 +1089,17 @@ def get_incident_handler() -> ConversationHandler:
                 CallbackQueryHandler(photo_edit_clear, pattern=r"^photo_edit_clear:(photo_before|photo_after)$"),
                 CallbackQueryHandler(edit_menu_back, pattern=r"^edit_menu_back$"),
             ],
+            ConversationHandler.TIMEOUT: [
+                MessageHandler(filters.ALL, on_incident_timeout),
+                CallbackQueryHandler(on_incident_timeout),
+            ],
         },
         fallbacks=[
             CommandHandler("cancel", cancel_incident),
             CommandHandler("sua", open_edit_menu_command),
+            CallbackQueryHandler(confirm_cancel, pattern=r"^cancel_incident_inline$"),
         ],
+        conversation_timeout=INCIDENT_CONVERSATION_TIMEOUT,
         name="incident_conversation",
         persistent=False,
     )
