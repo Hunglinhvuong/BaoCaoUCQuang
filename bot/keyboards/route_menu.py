@@ -2,8 +2,6 @@ from typing import Sequence
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from bot.keyboards.common import cancel_button_row
-
 
 def route_list_keyboard(
     routes: Sequence, page: int, total: int, page_size: int
@@ -22,7 +20,6 @@ def route_list_keyboard(
         buttons.append(nav_row)
 
     buttons.append([InlineKeyboardButton("🔍 Tìm theo tên", callback_data="route_search")])
-    buttons.append(cancel_button_row())
     return InlineKeyboardMarkup(buttons)
 
 
@@ -31,7 +28,6 @@ def incident_type_keyboard(types: Sequence) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(t["type_name"], callback_data=f"itype:{t['incident_type_id']}")]
         for t in types
     ]
-    buttons.append(cancel_button_row())
     return InlineKeyboardMarkup(buttons)
 
 
@@ -41,7 +37,6 @@ def incident_cause_keyboard(causes: Sequence) -> InlineKeyboardMarkup:
         for c in causes
     ]
     buttons.append([InlineKeyboardButton("⏭ Bỏ qua", callback_data="cause:skip")])
-    buttons.append(cancel_button_row())
     return InlineKeyboardMarkup(buttons)
 
 
@@ -50,9 +45,4 @@ def repair_span_keyboard(spans: Sequence) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(s["span_name"], callback_data=f"span:{s['repair_span_type_id']}")]
         for s in spans
     ]
-    buttons.append(cancel_button_row())
     return InlineKeyboardMarkup(buttons)
-
-
-def route_search_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([cancel_button_row()])

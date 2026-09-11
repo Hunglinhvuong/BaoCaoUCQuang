@@ -29,7 +29,6 @@ from bot.keyboards.route_menu import (
     incident_type_keyboard,
     repair_span_keyboard,
     route_list_keyboard,
-    route_search_keyboard,
 )
 from bot.states.incident_state import IncidentState
 from utils.formatters import format_incident_summary
@@ -148,7 +147,7 @@ async def route_page(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def route_search_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text("🔍 Nhập tên tuyến cần tìm:", reply_markup=route_search_keyboard())
+    await query.edit_message_text("🔍 Nhập tên tuyến cần tìm:")
     return IncidentState.SEARCH_ROUTE
 
 
@@ -505,7 +504,7 @@ async def material_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         return await _reply_session_lost(update)
 
     selected = inc["selected"]
-    used = {mid: item for mid, item in selected.items() if item["qty"] > 0}
+    used = {mid: item for mid, item in selected.items() if item["qty"] >= 0}
 
     if not used:
         await query.answer("Cần chọn ít nhất 1 vật tư có số lượng > 0.", show_alert=True)
@@ -519,7 +518,7 @@ async def material_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     await query.edit_message_text(
         "✏️ Nhập mô tả sự cố (hoặc bấm Bỏ qua):",
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("⏭ Bỏ qua", callback_data="desc_skip")], cancel_button_row()]
+            [[InlineKeyboardButton("⏭ Bỏ qua", callback_data="desc_skip")]]
         ),
     )
     return IncidentState.ENTER_DESCRIPTION
@@ -572,13 +571,6 @@ async def _ask_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         text="📍 Bấm nút bên dưới để gửi vị trí GPS hiện tại:",
         reply_markup=keyboard,
     )
-    # ReplyKeyboardMarkup và InlineKeyboardMarkup không gộp chung 1 tin nhắn được
-    # -> gửi thêm 1 tin nhắn nhỏ có nút huỷ để người dùng vẫn thoát được dễ dàng.
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text="Muốn dừng lại?",
-        reply_markup=InlineKeyboardMarkup([cancel_button_row()]),
-    )
     return IncidentState.SEND_LOCATION
 
 
@@ -600,10 +592,6 @@ async def receive_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await update.message.reply_text(
         "✅ Đã nhận vị trí.\n📷 Gửi ảnh TRƯỚC khi khắc phục (có thể gửi nhiều ảnh).",
         reply_markup=ReplyKeyboardRemove(),
-    )
-    await update.message.reply_text(
-        "Muốn dừng lại?",
-        reply_markup=InlineKeyboardMarkup([cancel_button_row()]),
     )
     return IncidentState.SEND_PHOTO_BEFORE
 
@@ -638,7 +626,7 @@ async def _receive_photo(
     await update.message.reply_text(
         f"✅ Đã nhận ảnh {label} ({len(inc[key])}). Gửi thêm hoặc bấm Xong.",
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("✅ Xong", callback_data=done_callback)], cancel_button_row()]
+            [[InlineKeyboardButton("✅ Xong", callback_data=done_callback)]]
         ),
     )
     return IncidentState.SEND_PHOTO_BEFORE if photo_type == "BEFORE" else IncidentState.SEND_PHOTO_AFTER
@@ -671,10 +659,7 @@ async def photos_before_done(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.edit_message_text("✅ Đã cập nhật ảnh trước.")
         return await _render_confirm(update, context)
 
-    await query.edit_message_text(
-        "✅ Đã lưu ảnh trước.\n\n📷 Gửi ảnh SAU khi khắc phục:",
-        reply_markup=InlineKeyboardMarkup([cancel_button_row()]),
-    )
+    await query.edit_message_text("✅ Đã lưu ảnh trước.\n\n📷 Gửi ảnh SAU khi khắc phục:")
     return IncidentState.SEND_PHOTO_AFTER
 
 
@@ -997,7 +982,7 @@ async def cancel_incident(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     return ConversationHandler.END
 
 
-INCIDENT_CONVERSATION_TIMEOUT = 180  # 4 phút không thao tác -> tự huỷ
+INCIDENT_CONVERSATION_TIMEOUT = 240  # 4 phút không thao tác -> tự huỷ
 
 
 @safe_conversation_step
