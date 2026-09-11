@@ -997,7 +997,7 @@ async def cancel_incident(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     return ConversationHandler.END
 
 
-INCIDENT_CONVERSATION_TIMEOUT = 240  # 4 phút không thao tác -> tự huỷ
+INCIDENT_CONVERSATION_TIMEOUT = 180  # 4 phút không thao tác -> tự huỷ
 
 
 @safe_conversation_step
