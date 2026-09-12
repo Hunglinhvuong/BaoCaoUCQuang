@@ -11,8 +11,8 @@
 # ============================================================
 set -euo pipefail
 
-INSTALL_DIR="${1:-/opt/fiber_rescue}"
-SERVICE_USER="${SERVICE_USER:-${SUDO_USER:-$USER}}"
+INSTALL_DIR="$(readlink -f "${1:-/opt/fiber_rescue}" 2>/dev/null || echo "${1:-/opt/fiber_rescue}")"
+SERVICE_USER="${SERVICE_USER:-${SUDO_USER:-${USER:-$(id -un)}}}"
 SERVICE_NAME="fiber-rescue-bot"
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -42,19 +42,25 @@ if [[ "$PY_MAJOR" -lt 3 || ( "$PY_MAJOR" -eq 3 && "$PY_MINOR" -lt 10 ) ]]; then
     exit 1
 fi
 
-command -v rsync >/dev/null 2>&1 || { echo "❌ Chưa cài rsync (sudo apt install rsync)."; exit 1; }
+if [[ "$INSTALL_DIR" != "$SOURCE_DIR" ]]; then
+    command -v rsync >/dev/null 2>&1 || { echo "❌ Chưa cài rsync (sudo apt install rsync)."; exit 1; }
+fi
 
 echo "▶ Copy code vào $INSTALL_DIR ..."
 mkdir -p "$INSTALL_DIR"
-rsync -a --delete \
-    --exclude 'venv' \
-    --exclude '__pycache__' \
-    --exclude '*.pyc' \
-    --exclude '.git' \
-    --exclude 'storage/photos/*' \
-    --exclude 'storage/*.pickle' \
-    --exclude '.env' \
-    "$SOURCE_DIR/" "$INSTALL_DIR/"
+if [[ "$INSTALL_DIR" == "$SOURCE_DIR" ]]; then
+    echo "   (đang cài ngay tại thư mục hiện có — bỏ qua bước copy)"
+else
+    rsync -a --delete \
+        --exclude 'venv' \
+        --exclude '__pycache__' \
+        --exclude '*.pyc' \
+        --exclude '.git' \
+        --exclude 'storage/photos/*' \
+        --exclude 'storage/*.pickle' \
+        --exclude '.env' \
+        "$SOURCE_DIR/" "$INSTALL_DIR/"
+fi
 
 mkdir -p "$INSTALL_DIR/storage/photos"
 chown -R "$SERVICE_USER":"$SERVICE_USER" "$INSTALL_DIR"

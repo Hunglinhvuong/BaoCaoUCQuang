@@ -47,9 +47,79 @@ python app.py
 - `/kt` — tra cứu sự cố: chọn ngày → chọn mã sự cố → xem chi tiết + ảnh đã gửi
   (FIELD chỉ xem sự cố của chính mình; ADMIN/MANAGER/VIEWER xem toàn bộ).
 
+## Triển khai trên máy Linux khác (systemd)
+
+Copy nguyên thư mục project (hoặc git clone) sang máy đích, sau đó:
+
+```bash
+sudo ./deploy/install.sh                 # cài vào /opt/fiber_rescue (mặc định)
+sudo ./deploy/install.sh /path/khac      # hoặc chỉ định thư mục khác
+```
+
+Script tự động: kiểm tra Python >= 3.10, copy code, tạo virtualenv, cài
+`requirements.txt`, tạo `.env` từ mẫu (nếu chưa có), tạo + enable systemd
+service `fiber-rescue-bot`.
+
+Sau khi cài:
+```bash
+sudo nano /opt/fiber_rescue/.env                       # điền TELEGRAM_BOT_TOKEN, DB...
+psql -d fiber_rescue -f /opt/fiber_rescue/database/schema.sql   # nếu DB chưa có
+sudo systemctl start fiber-rescue-bot
+sudo systemctl status fiber-rescue-bot
+sudo journalctl -u fiber-rescue-bot -f                  # xem log realtime
+```
+
+Bot tự khởi động lại nếu crash (`Restart=always`) và tự chạy khi máy khởi động
+lại (`systemctl enable`).
+
+**Cập nhật code** (sau khi đã cài): copy code mới đè lên thư mục nguồn rồi chạy
+```bash
+sudo ./deploy/update.sh [thư_mục_cài_đặt]
+```
+(không đụng tới `.env`, chỉ đồng bộ code + cài lại dependencies + restart service).
+
+**Gỡ cài đặt:**
+```bash
+sudo ./deploy/uninstall.sh [thư_mục_cài_đặt]
+```
+
+## Dashboard Streamlit
+
+Dashboard đọc trực tiếp từ cùng PostgreSQL (kết nối đồng bộ riêng, không đụng
+tới pool async của bot) và đọc ảnh trực tiếp từ `storage/photos/` trên đĩa.
+
+```bash
+python -m venv venv-dashboard        # có thể dùng chung venv với bot cũng được
+source venv-dashboard/bin/activate
+pip install -r requirements-dashboard.txt
+streamlit run dashboard/app.py
+```
+
+Mặc định chạy ở `http://localhost:8501`. Cấu hình DB lấy chung từ file `.env`
+(`DB_HOST`, `DB_NAME`...) — đảm bảo `.env` đã có sẵn ở thư mục gốc trước khi chạy.
+
+**Các trang đã triển khai:**
+- 📊 **Tổng quan** — KPI (tổng số, đang xử lý, hoàn tất, hôm nay, 7 ngày), biểu đồ
+  sự cố theo ngày, nguyên nhân, top tuyến nhiều sự cố.
+- 🗺️ **Bản đồ sự cố** — marker theo toạ độ GPS (màu theo trạng thái), click marker
+  xem thông tin nhanh rồi mở chi tiết đầy đủ.
+- 🚨 **Sự cố** — bảng lọc theo ngày/trạng thái/tuyến/loại/nguyên nhân/từ khoá,
+  xuất Excel, click 1 dòng để xem chi tiết + ảnh trước/sau (dạng popup).
+
+**Chưa triển khai** (theo yêu cầu, để ở bước sau): Phân tích, Vật tư, Tuyến cáp.
+
+⚠️ Dashboard hiện **chưa có xác thực đăng nhập** — hiển thị ảnh hiện trường và
+thông tin sự cố cho bất kỳ ai truy cập được URL. Nếu deploy ra ngoài mạng nội bộ,
+cần đặt sau reverse proxy có auth (VD: Nginx + Basic Auth, hoặc Streamlit
+`st.login` nếu dùng bản có hỗ trợ) trước khi public.
+
 ## Ghi chú
 
 - Ảnh lưu tại `storage/photos/<session_id>/`.
 - Repository `material_repository` khớp vật tư theo `material_rule`
   (NULL trong rule = wildcard khớp mọi giá trị của cột đó).
+- `/bc` tự huỷ báo cáo đang nhập dở nếu không thao tác gì trong 3 phút
+  (`conversation_timeout` trong `incident_handler.py`). Cần cài lại
+  `pip install -r requirements.txt` (đã thêm extra `job-queue`) trên các máy
+  đã triển khai trước đó để tính năng này hoạt động.
 - Chưa gồm `dashboard/` (Streamlit) trong phạm vi này — báo nếu cần bổ sung.
