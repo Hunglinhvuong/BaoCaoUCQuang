@@ -15,6 +15,11 @@ Cách dùng:
 
 Yêu cầu .env đã có đủ CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY /
 CLOUDINARY_API_SECRET và các biến DB_* như bình thường.
+
+Ghi chú: script này gọi thẳng REST API Cloudinary bằng `requests`
+(utils/cloudinary_client.py), KHÔNG dùng SDK `cloudinary` — vì SDK không áp
+dụng đúng proxy (HTTP_PROXY/HTTPS_PROXY) trên môi trường chỉ ra internet qua
+proxy.
 """
 import argparse
 import os
@@ -22,43 +27,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import cloudinary
-import cloudinary.api
 import psycopg2
 import psycopg2.extras
 
 from config.settings import settings
-
-cloudinary.config(
-    cloud_name=settings.cloudinary_cloud_name,
-    api_key=settings.cloudinary_api_key,
-    api_secret=settings.cloudinary_api_secret,
-    secure=True,
-    api_proxy=settings.cloudinary_proxy or None,
-)
-
-
-def list_cloudinary_resources(prefix: str = "") -> dict:
-    """Trả về dict {basename_không_đuôi: secure_url} cho toàn bộ ảnh trên Cloudinary
-    (duyệt phân trang bằng next_cursor cho tới khi hết)."""
-    mapping = {}
-    next_cursor = None
-    while True:
-        kwargs = {"type": "upload", "resource_type": "image", "max_results": 500}
-        if prefix:
-            kwargs["prefix"] = prefix
-        if next_cursor:
-            kwargs["next_cursor"] = next_cursor
-
-        result = cloudinary.api.resources(**kwargs)
-        for res in result.get("resources", []):
-            basename = res["public_id"].rsplit("/", 1)[-1]
-            mapping[basename] = res["secure_url"]
-
-        next_cursor = result.get("next_cursor")
-        if not next_cursor:
-            break
-    return mapping
+from utils.cloudinary_client import list_all_resources
 
 
 def main() -> None:
@@ -77,7 +50,7 @@ def main() -> None:
         print("▶ Không cấu hình proxy (kết nối trực tiếp).")
 
     print("▶ Đang tải danh sách ảnh từ Cloudinary...")
-    cloud_map = list_cloudinary_resources(args.prefix)
+    cloud_map = list_all_resources(args.prefix)
     print(f"  -> Tìm thấy {len(cloud_map)} ảnh trên Cloudinary.")
 
     conn = psycopg2.connect(
