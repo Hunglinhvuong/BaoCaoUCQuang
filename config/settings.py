@@ -23,9 +23,13 @@ class Settings:
     db_min_pool: int = int(os.getenv("DB_MIN_POOL", "2"))
     db_max_pool: int = int(os.getenv("DB_MAX_POOL", "10"))
 
-    photo_storage_dir: str = os.getenv("PHOTO_STORAGE_DIR", "storage/photos")
     persistence_file: str = os.getenv("PERSISTENCE_FILE", "storage/bot_persistence.pickle")
     timezone: str = os.getenv("APP_TIMEZONE", "Asia/Ho_Chi_Minh")
+
+    cloudinary_cloud_name: str = os.getenv("CLOUDINARY_CLOUD_NAME", "")
+    cloudinary_api_key: str = os.getenv("CLOUDINARY_API_KEY", "")
+    cloudinary_api_secret: str = os.getenv("CLOUDINARY_API_SECRET", "")
+    cloudinary_folder: str = os.getenv("CLOUDINARY_FOLDER", "fiber_rescue/photos")
 
     admin_telegram_ids: Tuple[int, ...] = field(
         default_factory=lambda: _parse_admin_ids(os.getenv("ADMIN_TELEGRAM_IDS", ""))

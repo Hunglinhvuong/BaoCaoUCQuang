@@ -17,6 +17,17 @@ def _get_service() -> ReportService:
     return ReportService()
 
 
+def _render_photo(file_path: str) -> None:
+    """Hiển thị 1 ảnh: URL Cloudinary (http/https) hiển thị trực tiếp;
+    đường dẫn local cũ (chưa chạy script migrate) thì kiểm tra tồn tại trước."""
+    if file_path.startswith("http://") or file_path.startswith("https://"):
+        st.image(file_path, use_container_width=True)
+    elif os.path.exists(file_path):
+        st.image(file_path, use_container_width=True)
+    else:
+        st.warning(f"Không tìm thấy ảnh: {file_path}")
+
+
 def render(incident_id: int) -> None:
     service = _get_service()
     incident = service.get_incident_detail(incident_id)
@@ -69,14 +80,8 @@ def render(incident_id: int) -> None:
     with col_before:
         st.caption(f"Trước khắc phục ({len(before_photos)})")
         for p in before_photos:
-            if os.path.exists(p["file_path"]):
-                st.image(p["file_path"], use_container_width=True)
-            else:
-                st.warning(f"Không tìm thấy file: {p['file_path']}")
+            _render_photo(p["file_path"])
     with col_after:
         st.caption(f"Sau khắc phục ({len(after_photos)})")
         for p in after_photos:
-            if os.path.exists(p["file_path"]):
-                st.image(p["file_path"], use_container_width=True)
-            else:
-                st.warning(f"Không tìm thấy file: {p['file_path']}")
+            _render_photo(p["file_path"])

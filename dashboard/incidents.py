@@ -121,16 +121,17 @@ def render() -> None:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-    table_cols = ["incident_id"] + export_cols
-    event = st.dataframe(
-        display_df[table_cols],
-        hide_index=True,
-        use_container_width=True,
-        column_config={"incident_id": None},  # ẩn cột id nhưng vẫn giữ để map khi click
-        on_select="rerun",
-        selection_mode="single-row",
-    )
+    st.dataframe(display_df[export_cols], hide_index=True, use_container_width=True)
 
-    if event.selection.rows:
-        selected_row = display_df.iloc[event.selection.rows[0]]
-        _show_detail_dialog(int(selected_row["incident_id"]))
+    st.divider()
+    st.subheader("🔍 Xem chi tiết 1 sự cố")
+    code_options = display_df["ma_su_co"].tolist()
+    col_pick, col_btn = st.columns([3, 1])
+    with col_pick:
+        selected_code = st.selectbox("Chọn mã sự cố", options=code_options, label_visibility="collapsed")
+    with col_btn:
+        view_clicked = st.button("Xem chi tiết + ảnh", type="primary", use_container_width=True)
+
+    if view_clicked and selected_code:
+        incident_id = int(display_df.loc[display_df["ma_su_co"] == selected_code, "incident_id"].iloc[0])
+        _show_detail_dialog(incident_id)

@@ -86,7 +86,7 @@ sudo ./deploy/uninstall.sh [thư_mục_cài_đặt]
 ## Dashboard Streamlit
 
 Dashboard đọc trực tiếp từ cùng PostgreSQL (kết nối đồng bộ riêng, không đụng
-tới pool async của bot) và đọc ảnh trực tiếp từ `storage/photos/` trên đĩa.
+tới pool async của bot) và hiển thị ảnh trực tiếp từ URL Cloudinary.
 
 ```bash
 python -m venv venv-dashboard        # có thể dùng chung venv với bot cũng được
@@ -115,7 +115,12 @@ cần đặt sau reverse proxy có auth (VD: Nginx + Basic Auth, hoặc Streamli
 
 ## Ghi chú
 
-- Ảnh lưu tại `storage/photos/<session_id>/`.
+- Ảnh trước/sau khắc phục được upload thẳng lên Cloudinary (không lưu local),
+  URL lưu trong `incident_photo.file_path`. Cần cấu hình `CLOUDINARY_CLOUD_NAME`,
+  `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` trong `.env`.
+- Dữ liệu ảnh cũ (đường dẫn local trước khi chuyển sang Cloudinary): sau khi tự
+  upload thư mục cũ lên Cloudinary, chạy `python scripts/migrate_photos_to_cloudinary.py --dry-run`
+  để xem trước, rồi chạy lại không kèm `--dry-run` để cập nhật DB.
 - Repository `material_repository` khớp vật tư theo `material_rule`
   (NULL trong rule = wildcard khớp mọi giá trị của cột đó).
 - `/bc` tự huỷ báo cáo đang nhập dở nếu không thao tác gì trong 3 phút

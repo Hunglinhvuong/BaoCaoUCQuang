@@ -1,4 +1,7 @@
 **/venv*/
-**/storage/photos/*
 **/.env
-storage/photos/.gitkeep*/storage/photos/.gitkeep
+
+# Quản lý thư mục storage/photos
+storage/photos/*
+!storage/photos/.gitkeep
+
