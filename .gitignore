@@ -4,4 +4,6 @@
 # Quản lý thư mục storage/photos
 storage/photos/*
 !storage/photos/.gitkeep
+**/__pycache__/
+*.pyc
 

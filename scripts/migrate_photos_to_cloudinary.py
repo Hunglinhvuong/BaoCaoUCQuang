@@ -34,6 +34,7 @@ cloudinary.config(
     api_key=settings.cloudinary_api_key,
     api_secret=settings.cloudinary_api_secret,
     secure=True,
+    api_proxy=settings.cloudinary_proxy or None,
 )
 
 
@@ -69,6 +70,11 @@ def main() -> None:
     if not settings.cloudinary_cloud_name:
         print("❌ Chưa cấu hình CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET trong .env")
         sys.exit(1)
+
+    if settings.cloudinary_proxy:
+        print(f"▶ Dùng proxy: {settings.cloudinary_proxy}")
+    else:
+        print("▶ Không cấu hình proxy (kết nối trực tiếp).")
 
     print("▶ Đang tải danh sách ảnh từ Cloudinary...")
     cloud_map = list_cloudinary_resources(args.prefix)

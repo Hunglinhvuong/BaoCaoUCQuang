@@ -30,6 +30,12 @@ class Settings:
     cloudinary_api_key: str = os.getenv("CLOUDINARY_API_KEY", "")
     cloudinary_api_secret: str = os.getenv("CLOUDINARY_API_SECRET", "")
     cloudinary_folder: str = os.getenv("CLOUDINARY_FOLDER", "fiber_rescue/photos")
+    # Cloudinary SDK dùng urllib3 trực tiếp, KHÔNG tự đọc HTTP_PROXY/HTTPS_PROXY
+    # như httpx (Telegram) -> phải khai báo rõ nếu máy chỉ ra internet qua proxy.
+    cloudinary_proxy: str = os.getenv(
+        "CLOUDINARY_PROXY",
+        os.getenv("HTTPS_PROXY", os.getenv("https_proxy", os.getenv("HTTP_PROXY", os.getenv("http_proxy", "")))),
+    )
 
     admin_telegram_ids: Tuple[int, ...] = field(
         default_factory=lambda: _parse_admin_ids(os.getenv("ADMIN_TELEGRAM_IDS", ""))
