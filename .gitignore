@@ -1,1 +1,4 @@
-venv/
+**/venv*/
+**/storage/photos/*
+**/.env
+storage/photos/.gitkeep*/storage/photos/.gitkeep
