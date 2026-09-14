@@ -9,7 +9,7 @@ Cách xử lý cho từng ảnh còn lưu đường dẫn local:
        upload thẳng file đó lên Cloudinary (đọc trực tiếp từ đĩa, không cần
        đoán tên nữa).
     3. Nếu không khớp và file cũng không còn trên đĩa -> báo là ảnh đã mất,
-       không thể khôi phục.
+       hỏi xác nhận để XOÁ dòng đó khỏi incident_photo (không thể khôi phục).
 
 Cách dùng:
     python scripts/migrate_photos_to_cloudinary.py --dry-run   # xem trước, KHÔNG sửa gì
@@ -84,7 +84,7 @@ def main() -> None:
 
     matched_by_name = []      # (photo_id, local_path, cloud_url)
     to_upload = []            # (photo_id, local_path)  - còn trên đĩa, cần tự upload
-    lost = []                 # local_path               - không khớp và cũng không còn trên đĩa
+    lost = []                 # (photo_id, local_path)  - không khớp và cũng không còn trên đĩa
 
     for row in rows:
         local_path = row["file_path"]
@@ -96,14 +96,14 @@ def main() -> None:
         elif not args.no_upload and os.path.exists(local_path):
             to_upload.append((row["photo_id"], local_path))
         else:
-            lost.append(local_path)
+            lost.append((row["photo_id"], local_path))
 
     print(f"▶ Khớp theo tên có sẵn trên Cloudinary: {len(matched_by_name)}")
     print(f"▶ Còn trên đĩa, sẽ tự upload: {len(to_upload)}")
     print(f"▶ Không khớp và cũng KHÔNG còn trên đĩa (mất ảnh): {len(lost)}")
     if lost:
-        for p in lost[:20]:
-            print(f"   ⚠️ MẤT: {p}")
+        for photo_id, p in lost[:20]:
+            print(f"   ⚠️ MẤT: [id={photo_id}] {p}")
         if len(lost) > 20:
             print(f"   ... và {len(lost) - 20} ảnh khác")
 
@@ -113,56 +113,69 @@ def main() -> None:
         conn.close()
         return
 
-    if not matched_by_name and not to_upload:
+    if not matched_by_name and not to_upload and not lost:
         print("Không có gì để cập nhật.")
-        read_cur.close()
-        conn.close()
-        return
-
-    total_changes = len(matched_by_name) + len(to_upload)
-    confirm = input(
-        f"\nCập nhật {len(matched_by_name)} dòng (khớp có sẵn) + "
-        f"upload mới {len(to_upload)} ảnh từ đĩa = {total_changes} dòng. Gõ 'yes' để tiếp tục: "
-    )
-    if confirm.strip().lower() != "yes":
-        print("Đã huỷ, không thay đổi gì.")
         read_cur.close()
         conn.close()
         return
 
     write_cur = conn.cursor()
 
-    for photo_id, _, cloud_url in matched_by_name:
-        write_cur.execute(
-            "UPDATE incident_photo SET file_path = %s WHERE photo_id = %s",
-            (cloud_url, photo_id),
+    if matched_by_name or to_upload:
+        total_changes = len(matched_by_name) + len(to_upload)
+        confirm = input(
+            f"\nCập nhật {len(matched_by_name)} dòng (khớp có sẵn) + "
+            f"upload mới {len(to_upload)} ảnh từ đĩa = {total_changes} dòng. Gõ 'yes' để tiếp tục: "
         )
+        if confirm.strip().lower() != "yes":
+            print("Đã huỷ phần cập nhật/upload, không thay đổi gì.")
+        else:
+            for photo_id, _, cloud_url in matched_by_name:
+                write_cur.execute(
+                    "UPDATE incident_photo SET file_path = %s WHERE photo_id = %s",
+                    (cloud_url, photo_id),
+                )
 
-    upload_errors = []
-    for i, (photo_id, local_path) in enumerate(to_upload, start=1):
-        print(f"  Upload {i}/{len(to_upload)}: {local_path}")
-        try:
-            with open(local_path, "rb") as f:
-                file_bytes = f.read()
-            public_id = os.path.splitext(os.path.basename(local_path))[0]
-            session_dir_name = os.path.basename(os.path.dirname(local_path))
-            folder = f"{settings.cloudinary_folder}/{session_dir_name}"
-            result = upload_image_bytes(file_bytes, public_id, folder)
-            write_cur.execute(
-                "UPDATE incident_photo SET file_path = %s WHERE photo_id = %s",
-                (result["secure_url"], photo_id),
-            )
-        except Exception as exc:
-            upload_errors.append((local_path, str(exc)))
-            print(f"    ❌ Lỗi: {exc}")
+            upload_errors = []
+            for i, (photo_id, local_path) in enumerate(to_upload, start=1):
+                print(f"  Upload {i}/{len(to_upload)}: {local_path}")
+                try:
+                    with open(local_path, "rb") as f:
+                        file_bytes = f.read()
+                    public_id = os.path.splitext(os.path.basename(local_path))[0]
+                    session_dir_name = os.path.basename(os.path.dirname(local_path))
+                    folder = f"{settings.cloudinary_folder}/{session_dir_name}"
+                    result = upload_image_bytes(file_bytes, public_id, folder)
+                    write_cur.execute(
+                        "UPDATE incident_photo SET file_path = %s WHERE photo_id = %s",
+                        (result["secure_url"], photo_id),
+                    )
+                except Exception as exc:
+                    upload_errors.append((local_path, str(exc)))
+                    print(f"    ❌ Lỗi: {exc}")
 
-    conn.commit()
-    print(f"\n✅ Đã cập nhật {len(matched_by_name)} dòng (khớp có sẵn) "
-          f"+ {len(to_upload) - len(upload_errors)} dòng (upload mới).")
-    if upload_errors:
-        print(f"⚠️  {len(upload_errors)} ảnh upload lỗi, chưa được cập nhật:")
-        for p, err in upload_errors:
-            print(f"   - {p}: {err}")
+            conn.commit()
+            print(f"\n✅ Đã cập nhật {len(matched_by_name)} dòng (khớp có sẵn) "
+                  f"+ {len(to_upload) - len(upload_errors)} dòng (upload mới).")
+            if upload_errors:
+                print(f"⚠️  {len(upload_errors)} ảnh upload lỗi, chưa được cập nhật:")
+                for p, err in upload_errors:
+                    print(f"   - {p}: {err}")
+
+    if lost:
+        confirm_delete = input(
+            f"\nXOÁ VĨNH VIỄN {len(lost)} dòng 'MẤT' khỏi incident_photo "
+            "(không khớp Cloudinary, không còn trên đĩa, không thể khôi phục)? "
+            "Gõ 'yes' để xác nhận: "
+        )
+        if confirm_delete.strip().lower() == "yes":
+            for photo_id, _ in lost:
+                write_cur.execute("DELETE FROM incident_photo WHERE photo_id = %s", (photo_id,))
+            conn.commit()
+            print(f"✅ Đã xoá {len(lost)} dòng ảnh bị mất.")
+        else:
+            print("Giữ nguyên các dòng ảnh bị mất (CHƯA xoá) — script migrate_incident_photo_schema.py "
+                  "sẽ vẫn báo lỗi cho tới khi các dòng này được xử lý.")
 
     read_cur.close()
     write_cur.close()
