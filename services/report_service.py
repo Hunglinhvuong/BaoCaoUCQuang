@@ -199,9 +199,9 @@ class ReportService:
 
     def get_incident_photos(self, incident_id: int) -> List[Dict]:
         sql = """
-            SELECT photo_type, file_path, caption, uploaded_at
+            SELECT photo_type, cloudinary_url, caption, created_at
             FROM incident_photo
             WHERE incident_id = %s
-            ORDER BY photo_id
+            ORDER BY incident_photo_id
         """
         return self._query_df(sql, (incident_id,)).to_dict("records")

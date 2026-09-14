@@ -165,22 +165,24 @@ class IncidentPhotoRepository:
         conn: asyncpg.Connection,
         incident_id: int,
         photo_type: str,
-        file_path: str,
         telegram_file_id: Optional[str],
         telegram_file_unique_id: Optional[str],
+        cloudinary_public_id: Optional[str],
+        cloudinary_asset_id: Optional[str],
+        cloudinary_url: str,
         caption: Optional[str] = None,
     ) -> asyncpg.Record:
         query = """
             INSERT INTO incident_photo (
-                incident_id, photo_type, file_path, telegram_file_id,
-                telegram_file_unique_id, caption
+                incident_id, photo_type, telegram_file_id, telegram_file_unique_id,
+                cloudinary_public_id, cloudinary_asset_id, cloudinary_url, caption
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING photo_id
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING incident_photo_id
         """
         return await conn.fetchrow(
-            query, incident_id, photo_type, file_path,
-            telegram_file_id, telegram_file_unique_id, caption,
+            query, incident_id, photo_type, telegram_file_id, telegram_file_unique_id,
+            cloudinary_public_id, cloudinary_asset_id, cloudinary_url, caption,
         )
 
     async def list_by_incident(self, incident_id: int) -> Sequence[asyncpg.Record]:
@@ -188,7 +190,7 @@ class IncidentPhotoRepository:
             SELECT photo_type, telegram_file_id, caption
             FROM incident_photo
             WHERE incident_id = $1
-            ORDER BY photo_id
+            ORDER BY incident_photo_id
         """
         async with self.pool.acquire() as conn:
             return await conn.fetch(query, incident_id)

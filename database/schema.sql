@@ -531,21 +531,25 @@ ON incident_material(material_id);
 -- ============================================================
 
 CREATE TABLE incident_photo (
-    photo_id                BIGSERIAL PRIMARY KEY,
+    incident_photo_id       BIGSERIAL PRIMARY KEY,
 
     incident_id             BIGINT NOT NULL,
 
     photo_type              VARCHAR(20) NOT NULL,
 
-    file_path               TEXT NOT NULL,
-
     telegram_file_id        TEXT,
 
     telegram_file_unique_id TEXT,
 
+    cloudinary_public_id    TEXT,
+
+    cloudinary_asset_id     TEXT,
+
+    cloudinary_url          TEXT NOT NULL,
+
     caption                 TEXT,
 
-    uploaded_at             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_incident_photo_incident
         FOREIGN KEY (incident_id)
@@ -559,7 +563,9 @@ CREATE TABLE incident_photo (
                 'AFTER',
                 'OTHER'
             )
-        )
+        ),
+
+    CONSTRAINT uq_incident_photo_cloudinary_public_id UNIQUE (cloudinary_public_id)
 );
 
 

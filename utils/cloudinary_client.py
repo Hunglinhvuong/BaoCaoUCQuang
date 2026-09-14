@@ -28,20 +28,32 @@ def _sign_params(params: Dict[str, str], api_secret: str) -> str:
     return hashlib.sha1((to_sign + api_secret).encode("utf-8")).hexdigest()
 
 
-def upload_image(file_bytes: bytes, public_id: str, folder: str) -> str:
-    """Upload 1 ảnh (bytes) lên Cloudinary bằng signed upload qua REST API.
-    Trả về secure_url."""
+def upload_image_from_url(source_url: str, public_id: str, folder: str) -> Dict[str, Optional[str]]:
+    """Upload 1 ảnh lên Cloudinary bằng cách đưa THẲNG URL nguồn (VD: link file
+    Telegram) cho Cloudinary tự tải — máy chủ của bot KHÔNG tải ảnh về, chỉ gửi
+    1 request nhỏ (JSON/form, không có bytes ảnh) rồi nhận lại metadata.
+    Trả về {"secure_url", "public_id", "asset_id"}.
+    """
     timestamp = str(int(time.time()))
     params_to_sign = {"folder": folder, "public_id": public_id, "timestamp": timestamp}
     signature = _sign_params(params_to_sign, settings.cloudinary_api_secret)
 
     url = f"https://api.cloudinary.com/v1_1/{settings.cloudinary_cloud_name}/image/upload"
-    data = {**params_to_sign, "api_key": settings.cloudinary_api_key, "signature": signature}
-    files = {"file": ("photo.jpg", bytes(file_bytes), "image/jpeg")}
+    data = {
+        **params_to_sign,
+        "api_key": settings.cloudinary_api_key,
+        "signature": signature,
+        "file": source_url,  # Cloudinary tự fetch ảnh từ URL này (remote fetch upload)
+    }
 
-    resp = requests.post(url, data=data, files=files, proxies=_get_proxies(), timeout=30)
+    resp = requests.post(url, data=data, proxies=_get_proxies(), timeout=30)
     resp.raise_for_status()
-    return resp.json()["secure_url"]
+    result = resp.json()
+    return {
+        "secure_url": result["secure_url"],
+        "public_id": result["public_id"],
+        "asset_id": result.get("asset_id"),
+    }
 
 
 def list_all_resources(prefix: str = "") -> Dict[str, str]:

@@ -610,11 +610,21 @@ async def _receive_photo(
     photo_service = context.bot_data["photo_service"]
     tg_photo = update.message.photo[-1]
     tg_file = await tg_photo.get_file()
-    file_path = await photo_service.save_photo(tg_file, inc["session_id"], photo_type)
+
+    try:
+        upload_result = await photo_service.save_photo(tg_file, inc["session_id"], photo_type)
+    except Exception:
+        logger.exception("Upload ảnh lên Cloudinary thất bại")
+        await update.message.reply_text(
+            "❌ Không upload được ảnh (lỗi mạng/Cloudinary). Vui lòng gửi lại ảnh này."
+        )
+        return IncidentState.SEND_PHOTO_BEFORE if photo_type == "BEFORE" else IncidentState.SEND_PHOTO_AFTER
 
     inc[key].append({
         "photo_type": photo_type,
-        "file_path": file_path,
+        "cloudinary_url": upload_result["secure_url"],
+        "cloudinary_public_id": upload_result.get("public_id"),
+        "cloudinary_asset_id": upload_result.get("asset_id"),
         "telegram_file_id": tg_photo.file_id,
         "telegram_file_unique_id": tg_photo.file_unique_id,
         "caption": update.message.caption,

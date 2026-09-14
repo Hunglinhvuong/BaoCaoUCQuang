@@ -66,9 +66,11 @@ class IncidentService:
                         conn,
                         incident_id,
                         photo["photo_type"],
-                        photo["file_path"],
                         photo.get("telegram_file_id"),
                         photo.get("telegram_file_unique_id"),
+                        photo.get("cloudinary_public_id"),
+                        photo.get("cloudinary_asset_id"),
+                        photo["cloudinary_url"],
                         photo.get("caption"),
                     )
 
