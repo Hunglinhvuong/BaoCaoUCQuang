@@ -34,6 +34,28 @@ from config.settings import settings
 from utils.cloudinary_client import list_all_resources
 
 
+def _find_match(local_basename: str, cloud_map: dict):
+    """Thử khớp theo nhiều chiến lược, từ chặt tới lỏng:
+    1. Khớp chính xác.
+    2. Cloudinary bật "Unique filename" khi upload -> tự thêm hậu tố ngẫu nhiên
+       phía SAU tên gốc -> thử basename Cloudinary có BẮT ĐẦU bằng tên local không.
+    3. Không phân biệt hoa/thường.
+    """
+    if local_basename in cloud_map:
+        return cloud_map[local_basename], "exact"
+
+    for cloud_basename, url in cloud_map.items():
+        if cloud_basename.startswith(local_basename):
+            return url, "prefix"
+
+    local_lower = local_basename.lower()
+    for cloud_basename, url in cloud_map.items():
+        if cloud_basename.lower() == local_lower:
+            return url, "case-insensitive"
+
+    return None, None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="Chỉ xem trước, không cập nhật DB")
@@ -52,6 +74,11 @@ def main() -> None:
     print("▶ Đang tải danh sách ảnh từ Cloudinary...")
     cloud_map = list_all_resources(args.prefix)
     print(f"  -> Tìm thấy {len(cloud_map)} ảnh trên Cloudinary.")
+    if cloud_map:
+        sample = list(cloud_map.keys())[:5]
+        print("  -> Mẫu tên file (basename) thực tế trên Cloudinary:")
+        for s in sample:
+            print(f"       {s}")
 
     conn = psycopg2.connect(
         host=settings.db_host, port=settings.db_port, dbname=settings.db_name,
@@ -65,19 +92,21 @@ def main() -> None:
     print(f"▶ Có {len(rows)} ảnh trong DB đang lưu đường dẫn local (chưa migrate).")
 
     matched, unmatched = [], []
+    match_kinds = {}
     for row in rows:
         local_path = row["file_path"]
         basename_no_ext = os.path.splitext(os.path.basename(local_path))[0]
-        cloud_url = cloud_map.get(basename_no_ext)
+        cloud_url, kind = _find_match(basename_no_ext, cloud_map)
         if cloud_url:
             matched.append((row["photo_id"], local_path, cloud_url))
+            match_kinds[kind] = match_kinds.get(kind, 0) + 1
         else:
-            unmatched.append(local_path)
+            unmatched.append((local_path, basename_no_ext))
 
-    print(f"▶ Khớp được {len(matched)}/{len(rows)} ảnh.")
+    print(f"▶ Khớp được {len(matched)}/{len(rows)} ảnh. Chi tiết: {match_kinds}")
     if unmatched:
         print(f"⚠️  {len(unmatched)} ảnh KHÔNG khớp được (không thấy trên Cloudinary):")
-        for p in unmatched[:20]:
+        for p, _ in unmatched[:20]:
             print(f"   - {p}")
         if len(unmatched) > 20:
             print(f"   ... và {len(unmatched) - 20} ảnh khác")
