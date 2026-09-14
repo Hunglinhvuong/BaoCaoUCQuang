@@ -56,6 +56,29 @@ def upload_image_from_url(source_url: str, public_id: str, folder: str) -> Dict[
     }
 
 
+def upload_image_bytes(file_bytes: bytes, public_id: str, folder: str) -> Dict[str, Optional[str]]:
+    """Upload 1 ảnh (đọc trực tiếp từ đĩa) lên Cloudinary bằng multipart form.
+    Chỉ dùng cho script migrate dữ liệu cũ (đọc file local có sẵn trên server)
+    — bot chính KHÔNG dùng hàm này (bot dùng upload_image_from_url, không tải
+    bytes về máy chủ)."""
+    timestamp = str(int(time.time()))
+    params_to_sign = {"folder": folder, "public_id": public_id, "timestamp": timestamp}
+    signature = _sign_params(params_to_sign, settings.cloudinary_api_secret)
+
+    url = f"https://api.cloudinary.com/v1_1/{settings.cloudinary_cloud_name}/image/upload"
+    data = {**params_to_sign, "api_key": settings.cloudinary_api_key, "signature": signature}
+    files = {"file": ("photo.jpg", file_bytes, "image/jpeg")}
+
+    resp = requests.post(url, data=data, files=files, proxies=_get_proxies(), timeout=60)
+    resp.raise_for_status()
+    result = resp.json()
+    return {
+        "secure_url": result["secure_url"],
+        "public_id": result["public_id"],
+        "asset_id": result.get("asset_id"),
+    }
+
+
 def list_all_resources(prefix: str = "") -> Dict[str, str]:
     """Liệt kê toàn bộ ảnh trên Cloudinary (Admin API, có phân trang).
     Trả về dict {basename_không_đuôi: secure_url}."""
