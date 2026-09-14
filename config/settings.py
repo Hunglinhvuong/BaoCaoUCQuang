@@ -26,6 +26,10 @@ class Settings:
     persistence_file: str = os.getenv("PERSISTENCE_FILE", "storage/bot_persistence.pickle")
     timezone: str = os.getenv("APP_TIMEZONE", "Asia/Ho_Chi_Minh")
 
+    # Thư mục chứa file .kml của từng tuyến cáp (tên file = route_code hoặc
+    # route_name, ví dụ data/kml/RT-001.kml hoặc data/kml/Tuyến Hà Đông.kml)
+    route_kml_dir: str = os.getenv("ROUTE_KML_DIR", "data/kml")
+
     cloudinary_cloud_name: str = os.getenv("CLOUDINARY_CLOUD_NAME", "")
     cloudinary_api_key: str = os.getenv("CLOUDINARY_API_KEY", "")
     cloudinary_api_secret: str = os.getenv("CLOUDINARY_API_SECRET", "")

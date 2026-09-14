@@ -10,7 +10,7 @@ if _PROJECT_ROOT not in sys.path:
 
 import streamlit as st
 
-from dashboard import home, incidents, map as map_page
+from dashboard import analytics, home, incidents, map as map_page, materials, routes
 
 st.set_page_config(
     page_title="Fiber Rescue Dashboard",
@@ -27,6 +27,15 @@ pages = {
     ],
     "🚨 Sự cố": [
         st.Page(incidents.render, title="Danh sách sự cố", icon="🚨", url_path="danh-sach-su-co"),
+    ],
+    "📈 Phân tích": [
+        st.Page(analytics.render, title="Phân tích", icon="📈", url_path="phan-tich"),
+    ],
+    "🧰 Vật tư": [
+        st.Page(materials.render, title="Vật tư", icon="🧰", url_path="vat-tu"),
+    ],
+    "🛣️ Tuyến cáp": [
+        st.Page(routes.render, title="Tuyến cáp", icon="🛣️", url_path="tuyen-cap"),
     ],
 }
 
