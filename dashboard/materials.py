@@ -140,7 +140,7 @@ def _render_consumption_tab() -> None:
             orientation="h", labels={"tong_tieu_hao": "Tổng tiêu hao", "tuyen": "Tuyến"},
         )
         fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", key="mat_route_comparison")
 
 
 def _render_usage_summary_tab() -> None:

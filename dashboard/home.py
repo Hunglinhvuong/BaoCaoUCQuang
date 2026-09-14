@@ -57,7 +57,7 @@ def render() -> None:
             labels={"ngay": "Ngày", "so_su_co": "Số sự cố"},
         )
         fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", key="home_daily_trend")
 
     col_a, col_b = st.columns(2)
 
@@ -69,7 +69,7 @@ def render() -> None:
         else:
             fig = px.pie(cause_df, names="nguyen_nhan", values="so_luong", hole=0.4)
             fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="home_cause_pie")
 
     with col_b:
         st.subheader("🛣 Tuyến có nhiều sự cố nhất")
@@ -84,4 +84,4 @@ def render() -> None:
                 labels={"so_su_co": "Số sự cố", "tuyen": "Tuyến"},
             )
             fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="home_top_routes")

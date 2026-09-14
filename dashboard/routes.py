@@ -134,7 +134,7 @@ def _render_detail_tab() -> None:
         else:
             fig = px.pie(cause_df, names="nguyen_nhan", values="so_luong", hole=0.4)
             fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="route_cause_pie")
 
     with col_b:
         st.markdown("**🧰 Vật tư đã sử dụng**")

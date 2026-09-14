@@ -18,26 +18,14 @@ st.set_page_config(
     layout="wide",
 )
 
-pages = {
-    "📊 Tổng quan": [
-        st.Page(home.render, title="Tổng quan", icon="📊", url_path="tong-quan", default=True),
-    ],
-    "🗺️ Bản đồ sự cố": [
-        st.Page(map_page.render, title="Bản đồ sự cố", icon="🗺️", url_path="ban-do-su-co"),
-    ],
-    "🚨 Sự cố": [
-        st.Page(incidents.render, title="Danh sách sự cố", icon="🚨", url_path="danh-sach-su-co"),
-    ],
-    "📈 Phân tích": [
-        st.Page(analytics.render, title="Phân tích", icon="📈", url_path="phan-tich"),
-    ],
-    "🧰 Vật tư": [
-        st.Page(materials.render, title="Vật tư", icon="🧰", url_path="vat-tu"),
-    ],
-    "🛣️ Tuyến cáp": [
-        st.Page(routes.render, title="Tuyến cáp", icon="🛣️", url_path="tuyen-cap"),
-    ],
-}
+pages = [
+    st.Page(home.render, title="Tổng quan", icon="📊", url_path="tong-quan", default=True),
+    st.Page(map_page.render, title="Bản đồ sự cố", icon="🗺️", url_path="ban-do-su-co"),
+    st.Page(incidents.render, title="Danh sách sự cố", icon="🚨", url_path="danh-sach-su-co"),
+    st.Page(analytics.render, title="Phân tích", icon="📈", url_path="phan-tich"),
+    st.Page(materials.render, title="Vật tư", icon="🧰", url_path="vat-tu"),
+    st.Page(routes.render, title="Tuyến cáp", icon="🛣️", url_path="tuyen-cap"),
+]
 
 nav = st.navigation(pages)
 nav.run()

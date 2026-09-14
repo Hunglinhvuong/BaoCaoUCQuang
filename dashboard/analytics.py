@@ -105,7 +105,7 @@ def _render_overview_tab() -> None:
     else:
         fig = px.bar(trend_df, x="ky", y="so_su_co", labels={"ky": "Kỳ", "so_su_co": "Số sự cố"})
         fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", key="an_overview_trend")
 
     col_a, col_b = st.columns(2)
     with col_a:
@@ -116,7 +116,7 @@ def _render_overview_tab() -> None:
         else:
             fig = px.pie(cause_df, names="nguyen_nhan", values="so_luong", hole=0.4)
             fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="an_overview_cause_pie")
 
     with col_b:
         st.subheader("🛣 Theo loại tuyến")
@@ -129,7 +129,7 @@ def _render_overview_tab() -> None:
                 labels={"loai_tuyen": "Loại tuyến", "so_su_co": "Số sự cố"},
             )
             fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, width="stretch", key="an_overview_route_type")
 
     st.subheader("📈 Xu hướng sự cố (trung bình động)")
     window = st.slider("Cửa sổ trung bình động (ngày)", min_value=3, max_value=30, value=7, key="an_window")
@@ -142,7 +142,7 @@ def _render_overview_tab() -> None:
             labels={"ky": "Ngày", "value": "Số sự cố", "variable": ""},
         )
         fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", key="an_overview_moving_avg")
 
 
 def _render_cause_analysis_tab() -> None:
@@ -161,7 +161,7 @@ def _render_cause_analysis_tab() -> None:
         )
         fig = px.pie(share_df, names="nguyen_nhan", values="so_luong", hole=0.4)
         fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", key="an_cause_share_pie")
 
     st.subheader("📈 Xu hướng nguyên nhân theo thời gian")
     trend_df = _load_cause_trend_monthly(date_from, date_to)
@@ -174,7 +174,7 @@ def _render_cause_analysis_tab() -> None:
             labels={"thang": "Tháng", "value": "Số lượng", "variable": "Nguyên nhân"},
         )
         fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, width="stretch", key="an_cause_trend_monthly")
 
     st.divider()
     st.subheader("🔬 Drill-down: Nguyên nhân → Tuyến → Địa điểm → Sự cố")
