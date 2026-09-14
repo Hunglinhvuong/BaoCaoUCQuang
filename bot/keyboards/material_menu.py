@@ -30,8 +30,7 @@ def material_selection_keyboard(selected: Dict[int, dict]) -> InlineKeyboardMark
             label = f"{item['name']} — {qty_text}"
             buttons.append([
                 InlineKeyboardButton("➖", callback_data=f"qty_dec:{mid}"),
-                InlineKeyboardButton(item["name"], callback_data=f"qty_noop:{mid}"),
-                InlineKeyboardButton(qty_text, callback_data=f"qty_noop:{mid}"),
+                InlineKeyboardButton(label, callback_data=f"qty_noop:{mid}"),
                 InlineKeyboardButton("➕", callback_data=f"qty_inc:{mid}"),
             ])
 

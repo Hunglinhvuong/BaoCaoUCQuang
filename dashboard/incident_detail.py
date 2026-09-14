@@ -1,5 +1,3 @@
-import os
-
 import streamlit as st
 
 from services.report_service import ReportService
@@ -17,15 +15,10 @@ def _get_service() -> ReportService:
     return ReportService()
 
 
-def _render_photo(file_path: str) -> None:
-    """Hiển thị 1 ảnh: URL Cloudinary (http/https) hiển thị trực tiếp;
-    đường dẫn local cũ (chưa chạy script migrate) thì kiểm tra tồn tại trước."""
-    if file_path.startswith("http://") or file_path.startswith("https://"):
-        st.image(file_path, use_container_width=True)
-    elif os.path.exists(file_path):
-        st.image(file_path, use_container_width=True)
-    else:
-        st.warning(f"Không tìm thấy ảnh: {file_path}")
+def _render_photo(cloudinary_url: str) -> None:
+    """Nhúng thẳng URL Cloudinary - trình duyệt người xem tự tải ảnh,
+    server Streamlit không xử lý/tải ảnh."""
+    st.image(cloudinary_url, use_container_width=True)
 
 
 def render(incident_id: int) -> None:
@@ -80,8 +73,8 @@ def render(incident_id: int) -> None:
     with col_before:
         st.caption(f"Trước khắc phục ({len(before_photos)})")
         for p in before_photos:
-            _render_photo(p["file_path"])
+            _render_photo(p["cloudinary_url"])
     with col_after:
         st.caption(f"Sau khắc phục ({len(after_photos)})")
         for p in after_photos:
-            _render_photo(p["file_path"])
+            _render_photo(p["cloudinary_url"])

@@ -504,7 +504,7 @@ async def material_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         return await _reply_session_lost(update)
 
     selected = inc["selected"]
-    used = {mid: item for mid, item in selected.items() if item["qty"] >= 0}
+    used = {mid: item for mid, item in selected.items() if item["qty"] > 0}
 
     if not used:
         await query.answer("Cần chọn ít nhất 1 vật tư có số lượng > 0.", show_alert=True)

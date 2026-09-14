@@ -115,12 +115,23 @@ cần đặt sau reverse proxy có auth (VD: Nginx + Basic Auth, hoặc Streamli
 
 ## Ghi chú
 
-- Ảnh trước/sau khắc phục được upload thẳng lên Cloudinary (không lưu local),
-  URL lưu trong `incident_photo.file_path`. Cần cấu hình `CLOUDINARY_CLOUD_NAME`,
-  `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` trong `.env`.
-- Dữ liệu ảnh cũ (đường dẫn local trước khi chuyển sang Cloudinary): sau khi tự
-  upload thư mục cũ lên Cloudinary, chạy `python scripts/migrate_photos_to_cloudinary.py --dry-run`
-  để xem trước, rồi chạy lại không kèm `--dry-run` để cập nhật DB.
+- **Ảnh trước/sau khắc phục**: máy chủ bot KHÔNG tải/lưu bytes ảnh. Luồng:
+  Telegram (`file_id`) → `getFile` → URL file Telegram → gửi URL đó cho
+  Cloudinary tự fetch (upload REST API, `file=<url>`) → nhận về
+  `secure_url`/`public_id`/`asset_id`, lưu vào `incident_photo.cloudinary_url` /
+  `cloudinary_public_id` / `cloudinary_asset_id`. Cần cấu hình
+  `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` trong
+  `.env` (và `CLOUDINARY_PROXY` nếu máy chủ ra internet qua proxy).
+  `/kt` (Telegram) gửi lại ảnh qua `telegram_file_id` (không qua Cloudinary);
+  Streamlit nhúng thẳng `cloudinary_url` — trình duyệt người xem tự tải ảnh từ
+  Cloudinary, dashboard không xử lý ảnh.
+- Nếu nâng cấp từ bản cũ (còn ảnh lưu local hoặc cột `file_path`), chạy lần lượt:
+  ```bash
+  python scripts/migrate_photos_to_cloudinary.py --dry-run   # rồi bỏ --dry-run
+  python scripts/migrate_incident_photo_schema.py --dry-run  # rồi bỏ --dry-run
+  ```
+  (script 2 cần chạy sau script 1, đổi cấu trúc bảng sang cột Cloudinary riêng
+  + đổi tên `photo_id`→`incident_photo_id`, `uploaded_at`→`created_at`.)
 - Repository `material_repository` khớp vật tư theo `material_rule`
   (NULL trong rule = wildcard khớp mọi giá trị của cột đó).
 - `/bc` tự huỷ báo cáo đang nhập dở nếu không thao tác gì trong 3 phút
