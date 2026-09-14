@@ -18,7 +18,7 @@ def _get_service() -> ReportService:
 def _render_photo(cloudinary_url: str) -> None:
     """Nhúng thẳng URL Cloudinary - trình duyệt người xem tự tải ảnh,
     server Streamlit không xử lý/tải ảnh."""
-    st.image(cloudinary_url, use_container_width=True)
+    st.image(cloudinary_url, width="stretch")
 
 
 def render(incident_id: int) -> None:
@@ -61,7 +61,7 @@ def render(incident_id: int) -> None:
     if materials_df.empty:
         st.caption("Không có vật tư nào được ghi nhận.")
     else:
-        st.dataframe(materials_df, hide_index=True, use_container_width=True)
+        st.dataframe(materials_df, hide_index=True, width="stretch")
 
     st.divider()
     st.markdown("**📷 Hình ảnh**")

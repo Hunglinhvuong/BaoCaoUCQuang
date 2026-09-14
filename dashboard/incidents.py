@@ -121,7 +121,7 @@ def render() -> None:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-    st.dataframe(display_df[export_cols], hide_index=True, use_container_width=True)
+    st.dataframe(display_df[export_cols], hide_index=True, width="stretch")
 
     st.divider()
     st.subheader("🔍 Xem chi tiết 1 sự cố")
@@ -130,7 +130,7 @@ def render() -> None:
     with col_pick:
         selected_code = st.selectbox("Chọn mã sự cố", options=code_options, label_visibility="collapsed")
     with col_btn:
-        view_clicked = st.button("Xem chi tiết + ảnh", type="primary", use_container_width=True)
+        view_clicked = st.button("Xem chi tiết + ảnh", type="primary", width="stretch")
 
     if view_clicked and selected_code:
         incident_id = int(display_df.loc[display_df["ma_su_co"] == selected_code, "incident_id"].iloc[0])
