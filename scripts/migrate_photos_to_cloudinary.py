@@ -1,25 +1,25 @@
 """
 Script MỘT LẦN: cập nhật cột incident_photo.file_path từ đường dẫn local
-(storage/photos/...) sang URL Cloudinary — dùng sau khi đã upload thủ công
-thư mục storage/photos/ lên Cloudinary.
+(storage/photos/...) sang URL Cloudinary.
 
-Cách khớp: lấy TÊN FILE (không đuôi) của từng ảnh trong DB, so với public_id
-(basename) của từng ảnh trên Cloudinary. Vì tên file sinh ra khi chụp là
-uuid4 ngẫu nhiên (VD: before_3f9a1b2c....jpg) nên khớp theo tên file là an toàn,
-không lo trùng.
+Cách xử lý cho từng ảnh còn lưu đường dẫn local:
+    1. Thử khớp theo tên file với ảnh đã có sẵn trên Cloudinary (phòng trường
+       hợp đã upload thủ công trước đó).
+    2. Nếu không khớp được nhưng file VẪN CÒN TRÊN ĐĨA server -> tự động
+       upload thẳng file đó lên Cloudinary (đọc trực tiếp từ đĩa, không cần
+       đoán tên nữa).
+    3. Nếu không khớp và file cũng không còn trên đĩa -> báo là ảnh đã mất,
+       không thể khôi phục.
 
 Cách dùng:
-    python scripts/migrate_photos_to_cloudinary.py --dry-run   # xem trước, KHÔNG sửa DB
+    python scripts/migrate_photos_to_cloudinary.py --dry-run   # xem trước, KHÔNG sửa gì
     python scripts/migrate_photos_to_cloudinary.py             # thực sự cập nhật (có xác nhận)
     python scripts/migrate_photos_to_cloudinary.py --prefix fiber_rescue/photos
 
 Yêu cầu .env đã có đủ CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY /
-CLOUDINARY_API_SECRET và các biến DB_* như bình thường.
-
-Ghi chú: script này gọi thẳng REST API Cloudinary bằng `requests`
-(utils/cloudinary_client.py), KHÔNG dùng SDK `cloudinary` — vì SDK không áp
-dụng đúng proxy (HTTP_PROXY/HTTPS_PROXY) trên môi trường chỉ ra internet qua
-proxy.
+CLOUDINARY_API_SECRET và các biến DB_* như bình thường. Nếu chạy trên máy chủ
+gốc (nơi các file storage/photos/ cũ còn tồn tại) thì bước 2 (tự upload) mới
+hoạt động được.
 """
 import argparse
 import os
@@ -31,35 +31,31 @@ import psycopg2
 import psycopg2.extras
 
 from config.settings import settings
-from utils.cloudinary_client import list_all_resources
+from utils.cloudinary_client import list_all_resources, upload_image_bytes
 
 
-def _find_match(local_basename: str, cloud_map: dict):
-    """Thử khớp theo nhiều chiến lược, từ chặt tới lỏng:
-    1. Khớp chính xác.
-    2. Cloudinary bật "Unique filename" khi upload -> tự thêm hậu tố ngẫu nhiên
-       phía SAU tên gốc -> thử basename Cloudinary có BẮT ĐẦU bằng tên local không.
-    3. Không phân biệt hoa/thường.
-    """
+def _find_cloud_match(local_basename: str, cloud_map: dict):
+    """Thử khớp theo nhiều chiến lược, từ chặt tới lỏng."""
     if local_basename in cloud_map:
-        return cloud_map[local_basename], "exact"
-
+        return cloud_map[local_basename]
     for cloud_basename, url in cloud_map.items():
         if cloud_basename.startswith(local_basename):
-            return url, "prefix"
-
+            return url
     local_lower = local_basename.lower()
     for cloud_basename, url in cloud_map.items():
         if cloud_basename.lower() == local_lower:
-            return url, "case-insensitive"
-
-    return None, None
+            return url
+    return None
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true", help="Chỉ xem trước, không cập nhật DB")
     parser.add_argument("--prefix", default="", help="Prefix folder trên Cloudinary (nếu có)")
+    parser.add_argument(
+        "--no-upload", action="store_true",
+        help="Chỉ thử khớp theo tên, KHÔNG tự upload file local còn sót",
+    )
     args = parser.parse_args()
 
     if not settings.cloudinary_cloud_name:
@@ -74,11 +70,6 @@ def main() -> None:
     print("▶ Đang tải danh sách ảnh từ Cloudinary...")
     cloud_map = list_all_resources(args.prefix)
     print(f"  -> Tìm thấy {len(cloud_map)} ảnh trên Cloudinary.")
-    if cloud_map:
-        sample = list(cloud_map.keys())[:5]
-        print("  -> Mẫu tên file (basename) thực tế trên Cloudinary:")
-        for s in sample:
-            print(f"       {s}")
 
     conn = psycopg2.connect(
         host=settings.db_host, port=settings.db_port, dbname=settings.db_name,
@@ -91,39 +82,48 @@ def main() -> None:
     rows = read_cur.fetchall()
     print(f"▶ Có {len(rows)} ảnh trong DB đang lưu đường dẫn local (chưa migrate).")
 
-    matched, unmatched = [], []
-    match_kinds = {}
+    matched_by_name = []      # (photo_id, local_path, cloud_url)
+    to_upload = []            # (photo_id, local_path)  - còn trên đĩa, cần tự upload
+    lost = []                 # local_path               - không khớp và cũng không còn trên đĩa
+
     for row in rows:
         local_path = row["file_path"]
         basename_no_ext = os.path.splitext(os.path.basename(local_path))[0]
-        cloud_url, kind = _find_match(basename_no_ext, cloud_map)
-        if cloud_url:
-            matched.append((row["photo_id"], local_path, cloud_url))
-            match_kinds[kind] = match_kinds.get(kind, 0) + 1
-        else:
-            unmatched.append((local_path, basename_no_ext))
+        cloud_url = _find_cloud_match(basename_no_ext, cloud_map)
 
-    print(f"▶ Khớp được {len(matched)}/{len(rows)} ảnh. Chi tiết: {match_kinds}")
-    if unmatched:
-        print(f"⚠️  {len(unmatched)} ảnh KHÔNG khớp được (không thấy trên Cloudinary):")
-        for p, _ in unmatched[:20]:
-            print(f"   - {p}")
-        if len(unmatched) > 20:
-            print(f"   ... và {len(unmatched) - 20} ảnh khác")
+        if cloud_url:
+            matched_by_name.append((row["photo_id"], local_path, cloud_url))
+        elif not args.no_upload and os.path.exists(local_path):
+            to_upload.append((row["photo_id"], local_path))
+        else:
+            lost.append(local_path)
+
+    print(f"▶ Khớp theo tên có sẵn trên Cloudinary: {len(matched_by_name)}")
+    print(f"▶ Còn trên đĩa, sẽ tự upload: {len(to_upload)}")
+    print(f"▶ Không khớp và cũng KHÔNG còn trên đĩa (mất ảnh): {len(lost)}")
+    if lost:
+        for p in lost[:20]:
+            print(f"   ⚠️ MẤT: {p}")
+        if len(lost) > 20:
+            print(f"   ... và {len(lost) - 20} ảnh khác")
 
     if args.dry_run:
-        print("\n(--dry-run) Không ghi gì vào DB. Chạy lại không kèm --dry-run để áp dụng.")
+        print("\n(--dry-run) Không thay đổi gì. Chạy lại không kèm --dry-run để áp dụng.")
         read_cur.close()
         conn.close()
         return
 
-    if not matched:
+    if not matched_by_name and not to_upload:
         print("Không có gì để cập nhật.")
         read_cur.close()
         conn.close()
         return
 
-    confirm = input(f"\nGhi đè {len(matched)} dòng trong incident_photo? Gõ 'yes' để tiếp tục: ")
+    total_changes = len(matched_by_name) + len(to_upload)
+    confirm = input(
+        f"\nCập nhật {len(matched_by_name)} dòng (khớp có sẵn) + "
+        f"upload mới {len(to_upload)} ảnh từ đĩa = {total_changes} dòng. Gõ 'yes' để tiếp tục: "
+    )
     if confirm.strip().lower() != "yes":
         print("Đã huỷ, không thay đổi gì.")
         read_cur.close()
@@ -131,13 +131,38 @@ def main() -> None:
         return
 
     write_cur = conn.cursor()
-    for photo_id, _, cloud_url in matched:
+
+    for photo_id, _, cloud_url in matched_by_name:
         write_cur.execute(
             "UPDATE incident_photo SET file_path = %s WHERE photo_id = %s",
             (cloud_url, photo_id),
         )
+
+    upload_errors = []
+    for i, (photo_id, local_path) in enumerate(to_upload, start=1):
+        print(f"  Upload {i}/{len(to_upload)}: {local_path}")
+        try:
+            with open(local_path, "rb") as f:
+                file_bytes = f.read()
+            public_id = os.path.splitext(os.path.basename(local_path))[0]
+            session_dir_name = os.path.basename(os.path.dirname(local_path))
+            folder = f"{settings.cloudinary_folder}/{session_dir_name}"
+            result = upload_image_bytes(file_bytes, public_id, folder)
+            write_cur.execute(
+                "UPDATE incident_photo SET file_path = %s WHERE photo_id = %s",
+                (result["secure_url"], photo_id),
+            )
+        except Exception as exc:
+            upload_errors.append((local_path, str(exc)))
+            print(f"    ❌ Lỗi: {exc}")
+
     conn.commit()
-    print(f"✅ Đã cập nhật {len(matched)} dòng trong incident_photo.")
+    print(f"\n✅ Đã cập nhật {len(matched_by_name)} dòng (khớp có sẵn) "
+          f"+ {len(to_upload) - len(upload_errors)} dòng (upload mới).")
+    if upload_errors:
+        print(f"⚠️  {len(upload_errors)} ảnh upload lỗi, chưa được cập nhật:")
+        for p, err in upload_errors:
+            print(f"   - {p}: {err}")
 
     read_cur.close()
     write_cur.close()
