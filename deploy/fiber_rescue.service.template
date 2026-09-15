@@ -1,5 +1,5 @@
 [Unit]
-Description=Fiber Rescue Telegram Bot
+Description=Fiber Rescue - Bot Telegram + Dashboard Streamlit
 After=network-online.target postgresql.service
 Wants=network-online.target
 
@@ -8,9 +8,11 @@ Type=simple
 User=__SERVICE_USER__
 WorkingDirectory=__INSTALL_DIR__
 EnvironmentFile=__INSTALL_DIR__/.env
-ExecStart=__INSTALL_DIR__/venv/bin/python __INSTALL_DIR__/app.py
+ExecStart=/usr/bin/env bash __INSTALL_DIR__/deploy/run.sh
 Restart=always
 RestartSec=5
+KillMode=control-group
+TimeoutStopSec=15
 StandardOutput=journal
 StandardError=journal
 

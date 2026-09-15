@@ -6,4 +6,4 @@ storage/photos/*
 !storage/photos/.gitkeep
 **/__pycache__/
 *.pyc
-
+data/

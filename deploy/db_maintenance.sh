@@ -14,7 +14,7 @@
 # ============================================================
 set -euo pipefail
 
-INSTALL_DIR="${1:-/opt/fiber_rescue}"
+INSTALL_DIR="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 ENV_FILE="$INSTALL_DIR/.env"
 
 if [[ ! -f "$ENV_FILE" ]]; then

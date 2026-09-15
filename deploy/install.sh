@@ -1,20 +1,17 @@
 #!/usr/bin/env bash
 # ============================================================
-# Cài đặt Fiber Rescue Bot làm systemd service trên Linux.
+# Cài đặt Fiber Rescue (bot Telegram + dashboard Streamlit) làm
+# systemd service NGAY TẠI thư mục gốc dự án (không copy sang thư
+# mục khác). Bot và dashboard dùng chung 1 virtualenv (venv/).
 #
 # Dùng:
-#   sudo ./deploy/install.sh [thư_mục_cài_đặt]
-#
-# Mặc định thư mục cài đặt: /opt/fiber_rescue
-# Biến môi trường SERVICE_USER (tuỳ chọn): user chạy bot,
-# mặc định là user gọi sudo (hoặc $USER nếu chạy trực tiếp bằng root).
+#   sudo ./deploy/install.sh
 # ============================================================
 set -euo pipefail
 
-INSTALL_DIR="$(readlink -f "${1:-/opt/fiber_rescue}" 2>/dev/null || echo "${1:-/opt/fiber_rescue}")"
+SERVICE_NAME="fiber_rescue"
+INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVICE_USER="${SERVICE_USER:-${SUDO_USER:-${USER:-$(id -un)}}}"
-SERVICE_NAME="fiber-rescue-bot"
-SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [[ $EUID -ne 0 ]]; then
     echo "❌ Cần chạy bằng sudo/root (để tạo systemd service)."
@@ -27,9 +24,9 @@ if ! id "$SERVICE_USER" >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "▶ Nguồn code:      $SOURCE_DIR"
-echo "▶ Cài đặt vào:     $INSTALL_DIR"
+echo "▶ Thư mục dự án:   $INSTALL_DIR"
 echo "▶ Chạy bằng user:  $SERVICE_USER"
+echo "▶ Tên service:     $SERVICE_NAME"
 echo ""
 
 command -v python3 >/dev/null 2>&1 || { echo "❌ Chưa cài python3."; exit 1; }
@@ -42,33 +39,15 @@ if [[ "$PY_MAJOR" -lt 3 || ( "$PY_MAJOR" -eq 3 && "$PY_MINOR" -lt 10 ) ]]; then
     exit 1
 fi
 
-if [[ "$INSTALL_DIR" != "$SOURCE_DIR" ]]; then
-    command -v rsync >/dev/null 2>&1 || { echo "❌ Chưa cài rsync (sudo apt install rsync)."; exit 1; }
-fi
-
-echo "▶ Copy code vào $INSTALL_DIR ..."
-mkdir -p "$INSTALL_DIR"
-if [[ "$INSTALL_DIR" == "$SOURCE_DIR" ]]; then
-    echo "   (đang cài ngay tại thư mục hiện có — bỏ qua bước copy)"
-else
-    rsync -a --delete \
-        --exclude 'venv' \
-        --exclude '__pycache__' \
-        --exclude '*.pyc' \
-        --exclude '.git' \
-        --exclude 'storage/photos/*' \
-        --exclude 'storage/*.pickle' \
-        --exclude '.env' \
-        "$SOURCE_DIR/" "$INSTALL_DIR/"
-fi
-
 mkdir -p "$INSTALL_DIR/storage/photos"
 chown -R "$SERVICE_USER":"$SERVICE_USER" "$INSTALL_DIR"
 
-echo "▶ Tạo virtualenv & cài dependencies ..."
+echo "▶ Tạo virtualenv dùng chung cho bot + dashboard ..."
 sudo -u "$SERVICE_USER" python3 -m venv "$INSTALL_DIR/venv"
 sudo -u "$SERVICE_USER" "$INSTALL_DIR/venv/bin/pip" install --upgrade pip -q
-sudo -u "$SERVICE_USER" "$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt" -q
+sudo -u "$SERVICE_USER" "$INSTALL_DIR/venv/bin/pip" install \
+    -r "$INSTALL_DIR/requirements.txt" \
+    -r "$INSTALL_DIR/requirements-dashboard.txt" -q
 
 if [[ ! -f "$INSTALL_DIR/.env" ]]; then
     cp "$INSTALL_DIR/.env.example" "$INSTALL_DIR/.env"
@@ -79,11 +58,13 @@ else
     NEW_ENV=0
 fi
 
+chmod +x "$INSTALL_DIR/deploy/run.sh"
+
 echo "▶ Tạo systemd service ..."
 sed \
     -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" \
     -e "s|__SERVICE_USER__|$SERVICE_USER|g" \
-    "$SOURCE_DIR/deploy/${SERVICE_NAME}.service.template" > "/etc/systemd/system/${SERVICE_NAME}.service"
+    "$INSTALL_DIR/deploy/${SERVICE_NAME}.service.template" > "/etc/systemd/system/${SERVICE_NAME}.service"
 
 systemctl daemon-reload
 systemctl enable "$SERVICE_NAME" >/dev/null
@@ -96,6 +77,7 @@ else
     echo "   1. (.env đã tồn tại sẵn, giữ nguyên) — kiểm tra lại nếu cần: sudo nano $INSTALL_DIR/.env"
 fi
 echo "   2. Tạo database (nếu chưa có): psql -d <db> -f $INSTALL_DIR/database/schema.sql"
-echo "   3. Khởi động:     sudo systemctl start $SERVICE_NAME"
+echo "   3. Khởi động:      sudo systemctl start $SERVICE_NAME"
 echo "   4. Xem trạng thái: sudo systemctl status $SERVICE_NAME"
 echo "   5. Xem log:        sudo journalctl -u $SERVICE_NAME -f"
+echo "   6. Dashboard mặc định chạy ở cổng 8501 (đổi bằng DASHBOARD_PORT trong .env nếu cần)"

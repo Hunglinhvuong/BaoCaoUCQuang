@@ -139,3 +139,7 @@ cần đặt sau reverse proxy có auth (VD: Nginx + Basic Auth, hoặc Streamli
   `pip install -r requirements.txt` (đã thêm extra `job-queue`) trên các máy
   đã triển khai trước đó để tính năng này hoạt động.
 - Chưa gồm `dashboard/` (Streamlit) trong phạm vi này — báo nếu cần bổ sung.
+
+Truy cập tạm thời Streamlit:
+ssh -N -L 8501:localhost:8501 ubuntu@10.0.158.138
+http://localhost:8501
