@@ -49,48 +49,53 @@ python app.py
 
 ## Triển khai trên máy Linux khác (systemd)
 
-Copy nguyên thư mục project (hoặc git clone) sang máy đích, sau đó:
+Copy nguyên thư mục project (hoặc git clone) sang máy đích, rồi chạy ngay tại
+thư mục gốc dự án đó (không copy sang thư mục khác):
 
 ```bash
-sudo ./deploy/install.sh                 # cài vào /opt/fiber_rescue (mặc định)
-sudo ./deploy/install.sh /path/khac      # hoặc chỉ định thư mục khác
+sudo ./deploy/install.sh
 ```
 
-Script tự động: kiểm tra Python >= 3.10, copy code, tạo virtualenv, cài
-`requirements.txt`, tạo `.env` từ mẫu (nếu chưa có), tạo + enable systemd
-service `fiber-rescue-bot`.
+Script tự động: kiểm tra Python >= 3.10, tạo 1 virtualenv `venv/` dùng chung
+cho cả bot lẫn dashboard, cài `requirements.txt` + `requirements-dashboard.txt`
+vào venv đó, tạo `.env` từ mẫu (nếu chưa có), tạo + enable systemd service
+**`fiber_rescue`** (chạy `deploy/run.sh` — khởi động song song bot Telegram và
+`streamlit run dashboard/app.py`; nếu 1 trong 2 tiến trình chết, service tự
+restart lại cả hai).
 
-Sau khi cài:
+Sau khi cài (đường dẫn ví dụ, thay bằng thư mục dự án thực tế trên máy đích):
 ```bash
-sudo nano /opt/fiber_rescue/.env                       # điền TELEGRAM_BOT_TOKEN, DB...
-psql -d fiber_rescue -f /opt/fiber_rescue/database/schema.sql   # nếu DB chưa có
-sudo systemctl start fiber-rescue-bot
-sudo systemctl status fiber-rescue-bot
-sudo journalctl -u fiber-rescue-bot -f                  # xem log realtime
+sudo nano /đường/dẫn/dự/án/.env                    # điền TELEGRAM_BOT_TOKEN, DB...
+psql -d fiber_rescue -f /đường/dẫn/dự/án/database/schema.sql   # nếu DB chưa có
+sudo systemctl start fiber_rescue
+sudo systemctl status fiber_rescue
+sudo journalctl -u fiber_rescue -f                  # xem log realtime (cả bot + dashboard)
 ```
 
-Bot tự khởi động lại nếu crash (`Restart=always`) và tự chạy khi máy khởi động
-lại (`systemctl enable`).
+Dashboard mặc định chạy ở cổng `8501` (`http://<ip_máy>:8501`) — đổi bằng biến
+`DASHBOARD_PORT` trong `.env` nếu cần.
 
-**Cập nhật code** (sau khi đã cài): copy code mới đè lên thư mục nguồn rồi chạy
+**Cập nhật code** (sau khi đã cài): `git pull` hoặc copy code mới đè lên đúng
+thư mục dự án đó, rồi chạy
 ```bash
-sudo ./deploy/update.sh [thư_mục_cài_đặt]
+sudo ./deploy/update.sh
 ```
-(không đụng tới `.env`, chỉ đồng bộ code + cài lại dependencies + restart service).
+(không đụng tới `.env`, chỉ cài lại dependencies vào venv chung + restart service).
 
 **Gỡ cài đặt:**
 ```bash
-sudo ./deploy/uninstall.sh [thư_mục_cài_đặt]
+sudo ./deploy/uninstall.sh
 ```
 
 ## Dashboard Streamlit
 
 Dashboard đọc trực tiếp từ cùng PostgreSQL (kết nối đồng bộ riêng, không đụng
-tới pool async của bot) và hiển thị ảnh trực tiếp từ URL Cloudinary.
+tới pool async của bot) và hiển thị ảnh trực tiếp từ URL Cloudinary. Khi triển
+khai bằng `deploy/install.sh`, dashboard chạy chung service `fiber_rescue` với
+bot (xem mục deploy ở trên). Chạy thủ công (dev/test):
 
 ```bash
-python -m venv venv-dashboard        # có thể dùng chung venv với bot cũng được
-source venv-dashboard/bin/activate
+source venv/bin/activate             # venv chung với bot
 pip install -r requirements-dashboard.txt
 streamlit run dashboard/app.py
 ```
@@ -105,8 +110,15 @@ Mặc định chạy ở `http://localhost:8501`. Cấu hình DB lấy chung t�
   xem thông tin nhanh rồi mở chi tiết đầy đủ.
 - 🚨 **Sự cố** — bảng lọc theo ngày/trạng thái/tuyến/loại/nguyên nhân/từ khoá,
   xuất Excel, click 1 dòng để xem chi tiết + ảnh trước/sau (dạng popup).
-
-**Chưa triển khai** (theo yêu cầu, để ở bước sau): Phân tích, Vật tư, Tuyến cáp.
+- 📈 **Phân tích** — tổng quan sự cố theo thời gian/nguyên nhân/route type, phân
+  tích nguyên nhân (tỷ trọng, xu hướng, drill-down Nguyên nhân→Tuyến→Địa
+  điểm→Sự cố), phát hiện bất thường (tuyến/nguyên nhân/vật tư tăng đột biến).
+- 🧰 **Vật tư** — danh mục vật tư, phân tích tiêu hao (vật tư/sự cố, cáp/sự cố,
+  so sánh giữa các tuyến), thống kê sử dụng theo khoảng thời gian + xuất Excel.
+- 🛣️ **Tuyến cáp** — danh sách tuyến, chi tiết tuyến (lịch sử sự cố, nguyên
+  nhân, vật tư đã dùng), bản đồ tuyến vẽ từ file `.kml` (đặt trong thư mục cấu
+  hình bởi `ROUTE_KML_DIR` trong `.env`, tên file = `route_code.kml` hoặc
+  `route_name.kml`) + marker vị trí sự cố trên tuyến.
 
 ⚠️ Dashboard hiện **chưa có xác thực đăng nhập** — hiển thị ảnh hiện trường và
 thông tin sự cố cho bất kỳ ai truy cập được URL. Nếu deploy ra ngoài mạng nội bộ,
@@ -139,7 +151,3 @@ cần đặt sau reverse proxy có auth (VD: Nginx + Basic Auth, hoặc Streamli
   `pip install -r requirements.txt` (đã thêm extra `job-queue`) trên các máy
   đã triển khai trước đó để tính năng này hoạt động.
 - Chưa gồm `dashboard/` (Streamlit) trong phạm vi này — báo nếu cần bổ sung.
-
-Truy cập tạm thời Streamlit:
-ssh -N -L 8501:localhost:8501 ubuntu@10.0.158.138
-http://localhost:8501
